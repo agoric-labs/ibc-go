@@ -192,8 +192,10 @@ func (k Keeper) ChannelOpenInit(goCtx context.Context, msg *channeltypes.MsgChan
 		return nil, sdkerrors.Wrap(err, "channel open init callback failed")
 	}
 
-	// Write channel into state
-	k.ChannelKeeper.WriteOpenInitChannel(ctx, msg.PortId, channelID, msg.Channel.Ordering, msg.Channel.ConnectionHops, msg.Channel.Counterparty, version)
+	if version != "" {
+		// Write channel into state
+		k.ChannelKeeper.WriteOpenInitChannel(ctx, msg.PortId, channelID, msg.Channel.Ordering, msg.Channel.ConnectionHops, msg.Channel.Counterparty, version)
+	}
 
 	return &channeltypes.MsgChannelOpenInitResponse{
 		ChannelId: channelID,
@@ -233,8 +235,10 @@ func (k Keeper) ChannelOpenTry(goCtx context.Context, msg *channeltypes.MsgChann
 		return nil, sdkerrors.Wrap(err, "channel open try callback failed")
 	}
 
-	// Write channel into state
-	k.ChannelKeeper.WriteOpenTryChannel(ctx, msg.PortId, channelID, msg.Channel.Ordering, msg.Channel.ConnectionHops, msg.Channel.Counterparty, version)
+	if version != "" {
+		// Write channel into state
+		k.ChannelKeeper.WriteOpenTryChannel(ctx, msg.PortId, channelID, msg.Channel.Ordering, msg.Channel.ConnectionHops, msg.Channel.Counterparty, version)
+	}
 
 	return &channeltypes.MsgChannelOpenTryResponse{
 		Version: version,
