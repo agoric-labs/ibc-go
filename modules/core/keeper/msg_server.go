@@ -15,6 +15,12 @@ import (
 	coretypes "github.com/cosmos/ibc-go/v6/modules/core/types"
 )
 
+// AsyncVersionNegotiation is a global variable that describes whether our
+// ibc-go implementation supports returning an empty string for the version in
+// OnChanOpenTry, then having the app explicitly call the WriteOpenTryChannel
+// method itself, possibly in a different block.
+const AsyncVersionNegotiation = true
+
 var (
 	_ clienttypes.MsgServer     = Keeper{}
 	_ connectiontypes.MsgServer = Keeper{}
@@ -191,8 +197,10 @@ func (k Keeper) ChannelOpenInit(goCtx context.Context, msg *channeltypes.MsgChan
 		return nil, sdkerrors.Wrapf(err, "channel open init callback failed for port ID: %s, channel ID: %s", msg.PortId, channelID)
 	}
 
-	// Write channel into state
-	k.ChannelKeeper.WriteOpenInitChannel(ctx, msg.PortId, channelID, msg.Channel.Ordering, msg.Channel.ConnectionHops, msg.Channel.Counterparty, version)
+	if version != "" {
+		// Write channel into state
+		k.ChannelKeeper.WriteOpenInitChannel(ctx, msg.PortId, channelID, msg.Channel.Ordering, msg.Channel.ConnectionHops, msg.Channel.Counterparty, version)
+	}
 
 	return &channeltypes.MsgChannelOpenInitResponse{
 		ChannelId: channelID,
@@ -232,8 +240,12 @@ func (k Keeper) ChannelOpenTry(goCtx context.Context, msg *channeltypes.MsgChann
 		return nil, sdkerrors.Wrapf(err, "channel open try callback failed for port ID: %s, channel ID: %s", msg.PortId, channelID)
 	}
 
-	// Write channel into state
-	k.ChannelKeeper.WriteOpenTryChannel(ctx, msg.PortId, channelID, msg.Channel.Ordering, msg.Channel.ConnectionHops, msg.Channel.Counterparty, version)
+	if version != "" {
+		// Write channel into state
+		k.ChannelKeeper.WriteOpenTryChannel(ctx, msg.PortId, channelID, msg.Channel.Ordering, msg.Channel.ConnectionHops, msg.Channel.Counterparty, version)
+	} else if !AsyncVersionNegotiation {
+		return nil, sdkerrors.Wrapf(channeltypes.ErrInvalidChannel, "channel version cannot be empty")
+	}
 
 	return &channeltypes.MsgChannelOpenTryResponse{
 		Version: version,
