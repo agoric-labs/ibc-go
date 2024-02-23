@@ -19,7 +19,7 @@ import (
 // ibc-go implementation supports returning an empty string for the version in
 // OnChanOpenTry, then having the app explicitly call the WriteOpenTryChannel
 // method itself, possibly in a different block.
-const AsyncVersionNegotiation = true
+const AsyncVersionNegotiation = false
 
 var (
 	_ clienttypes.MsgServer     = Keeper{}
@@ -197,6 +197,9 @@ func (k Keeper) ChannelOpenInit(goCtx context.Context, msg *channeltypes.MsgChan
 		return nil, sdkerrors.Wrapf(err, "channel open init callback failed for port ID: %s, channel ID: %s", msg.PortId, channelID)
 	}
 
+	if version == "" && !AsyncVersionNegotiation {
+		return nil, sdkerrors.Wrap(channeltypes.ErrInvalidChannel, "channel open init callback failed: empty version")
+	}
 	if version != "" {
 		// Write channel into state
 		k.ChannelKeeper.WriteOpenInitChannel(ctx, msg.PortId, channelID, msg.Channel.Ordering, msg.Channel.ConnectionHops, msg.Channel.Counterparty, version)
@@ -240,11 +243,12 @@ func (k Keeper) ChannelOpenTry(goCtx context.Context, msg *channeltypes.MsgChann
 		return nil, sdkerrors.Wrapf(err, "channel open try callback failed for port ID: %s, channel ID: %s", msg.PortId, channelID)
 	}
 
+	if version == "" && !AsyncVersionNegotiation {
+		return nil, sdkerrors.Wrapf(channeltypes.ErrInvalidChannel, "channel version cannot be empty")
+	}
 	if version != "" {
 		// Write channel into state
 		k.ChannelKeeper.WriteOpenTryChannel(ctx, msg.PortId, channelID, msg.Channel.Ordering, msg.Channel.ConnectionHops, msg.Channel.Counterparty, version)
-	} else if !AsyncVersionNegotiation {
-		return nil, sdkerrors.Wrapf(channeltypes.ErrInvalidChannel, "channel version cannot be empty")
 	}
 
 	return &channeltypes.MsgChannelOpenTryResponse{
