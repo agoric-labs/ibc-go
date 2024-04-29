@@ -42,6 +42,18 @@ func TestParseDenomTrace(t *testing.T) {
 	}
 }
 
+func FuzzParseDenomTrace(f *testing.F) {
+	f.Add("uatom")
+	f.Add("portidone/channel-0/uatom")
+	f.Add("portidone/channel-0/portidtwo/channel-1/uatom")
+	f.Add("portidone/channel-0/gamm/pool/1")
+	f.Add("gamm/pool/1")
+
+	f.Fuzz(func(t *testing.T, a string) {
+		ParseDenomTrace(a)
+	})
+}
+
 func TestDenomTrace_IBCDenom(t *testing.T) {
 	testCases := []struct {
 		name     string
