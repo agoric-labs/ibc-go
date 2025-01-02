@@ -3,8 +3,8 @@ package types_test
 import (
 	sdkmath "cosmossdk.io/math"
 
+	authz "cosmossdk.io/x/authz"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	authz "github.com/cosmos/cosmos-sdk/x/authz"
 
 	"github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
 	ibctesting "github.com/cosmos/ibc-go/v8/testing"

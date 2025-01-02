@@ -5,7 +5,7 @@ import (
 
 	testifysuite "github.com/stretchr/testify/suite"
 
-	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	authtypes "cosmossdk.io/x/auth/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 
 	"github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller/keeper"
