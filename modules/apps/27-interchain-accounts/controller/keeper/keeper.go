@@ -85,15 +85,6 @@ func (k Keeper) GetConnectionID(ctx sdk.Context, portID, channelID string) (stri
 	return channel.ConnectionHops[0], nil
 }
 
-// GetConnectionID returns the connection id for the given port and channelIDs.
-func (k Keeper) GetConnectionID(ctx sdk.Context, portID, channelID string) (string, error) {
-	channel, found := k.channelKeeper.GetChannel(ctx, portID, channelID)
-	if !found {
-		return "", sdkerrors.Wrapf(channeltypes.ErrChannelNotFound, "port ID (%s) channel ID (%s)", portID, channelID)
-	}
-	return channel.ConnectionHops[0], nil
-}
-
 // GetAllPorts returns all ports to which the interchain accounts controller module is bound. Used in ExportGenesis
 func (k Keeper) GetAllPorts(ctx sdk.Context) []string {
 	store := ctx.KVStore(k.storeKey)

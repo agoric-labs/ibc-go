@@ -43,7 +43,7 @@ func (k Keeper) RegisterInterchainAccount(ctx sdk.Context, connectionID, owner, 
 
 	_, err = k.registerInterchainAccount(ctx, connectionID, portID, version)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	return nil

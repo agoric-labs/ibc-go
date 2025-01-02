@@ -13,13 +13,3 @@ func (k Keeper) IsControllerEnabled(ctx sdk.Context) bool {
 	k.paramSpace.Get(ctx, types.KeyControllerEnabled, &res)
 	return res
 }
-
-// GetParams returns the total set of the controller submodule parameters.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
-	return types.NewParams(k.IsControllerEnabled(ctx))
-}
-
-// SetParams sets the total set of the controller submodule parameters.
-func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
-	k.paramSpace.SetParamSet(ctx, &params)
-}

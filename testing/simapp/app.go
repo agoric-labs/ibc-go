@@ -130,6 +130,7 @@ import (
 	solomachine "github.com/cosmos/ibc-go/v8/modules/light-clients/06-solomachine"
 	ibctm "github.com/cosmos/ibc-go/v8/modules/light-clients/07-tendermint"
 	ibcmock "github.com/cosmos/ibc-go/v8/testing/mock"
+	v6 "github.com/cosmos/ibc-go/v8/testing/simapp/upgrades/v6"
 	ibctestingtypes "github.com/cosmos/ibc-go/v8/testing/types"
 )
 

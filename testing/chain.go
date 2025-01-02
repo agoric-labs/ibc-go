@@ -639,9 +639,3 @@ func (chain *TestChain) GetChannelCapability(portID, channelID string) *capabili
 func (chain *TestChain) GetTimeoutHeight() clienttypes.Height {
 	return clienttypes.NewHeight(clienttypes.ParseChainID(chain.ChainID), uint64(chain.GetContext().BlockHeight())+100)
 }
-
-// GetTimeoutHeight is a convenience function which returns a IBC packet timeout height
-// to be used for testing. It returns the current IBC height + 100 blocks
-func (chain *TestChain) GetTimeoutHeight() clienttypes.Height {
-	return clienttypes.NewHeight(clienttypes.ParseChainID(chain.ChainID), uint64(chain.GetContext().BlockHeight())+100)
-}
