@@ -4,10 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	testifysuite "github.com/stretchr/testify/suite"
-
-	authkeeper "cosmossdk.io/x/auth/keeper"
-
+	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 	genesistypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/genesis/types"
 	"github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/host/keeper"
 	"github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/host/types"
@@ -17,6 +14,7 @@ import (
 	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
 	ibcerrors "github.com/cosmos/ibc-go/v8/modules/core/errors"
 	ibctesting "github.com/cosmos/ibc-go/v8/testing"
+	testifysuite "github.com/stretchr/testify/suite"
 )
 
 var (
