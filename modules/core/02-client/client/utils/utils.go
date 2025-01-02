@@ -3,17 +3,19 @@ package utils
 import (
 	"context"
 
+	errorsmod "cosmossdk.io/errors"
+
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
-	tmtypes "github.com/tendermint/tendermint/types"
 
-	"github.com/cosmos/ibc-go/v6/modules/core/02-client/types"
-	commitmenttypes "github.com/cosmos/ibc-go/v6/modules/core/23-commitment/types"
-	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
-	ibcclient "github.com/cosmos/ibc-go/v6/modules/core/client"
-	"github.com/cosmos/ibc-go/v6/modules/core/exported"
-	ibctmtypes "github.com/cosmos/ibc-go/v6/modules/light-clients/07-tendermint/types"
+	tmtypes "github.com/cometbft/cometbft/types"
+
+	"github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
+	commitmenttypes "github.com/cosmos/ibc-go/v8/modules/core/23-commitment/types"
+	host "github.com/cosmos/ibc-go/v8/modules/core/24-host"
+	ibcclient "github.com/cosmos/ibc-go/v8/modules/core/client"
+	"github.com/cosmos/ibc-go/v8/modules/core/exported"
+	ibctm "github.com/cosmos/ibc-go/v8/modules/light-clients/07-tendermint"
 )
 
 // QueryClientState returns a client state. If prove is true, it performs an ABCI store query
@@ -46,7 +48,7 @@ func QueryClientStateABCI(
 
 	// check if client exists
 	if len(value) == 0 {
-		return nil, sdkerrors.Wrap(types.ErrClientNotFound, clientID)
+		return nil, errorsmod.Wrap(types.ErrClientNotFound, clientID)
 	}
 
 	cdc := codec.NewProtoCodec(clientCtx.InterfaceRegistry)
@@ -99,7 +101,7 @@ func QueryConsensusStateABCI(
 
 	// check if consensus state exists
 	if len(value) == 0 {
-		return nil, sdkerrors.Wrap(types.ErrConsensusStateNotFound, clientID)
+		return nil, errorsmod.Wrap(types.ErrConsensusStateNotFound, clientID)
 	}
 
 	cdc := codec.NewProtoCodec(clientCtx.InterfaceRegistry)
@@ -119,15 +121,15 @@ func QueryConsensusStateABCI(
 
 // QueryTendermintHeader takes a client context and returns the appropriate
 // tendermint header
-func QueryTendermintHeader(clientCtx client.Context) (ibctmtypes.Header, int64, error) {
+func QueryTendermintHeader(clientCtx client.Context) (ibctm.Header, int64, error) {
 	node, err := clientCtx.GetNode()
 	if err != nil {
-		return ibctmtypes.Header{}, 0, err
+		return ibctm.Header{}, 0, err
 	}
 
 	info, err := node.ABCIInfo(context.Background())
 	if err != nil {
-		return ibctmtypes.Header{}, 0, err
+		return ibctm.Header{}, 0, err
 	}
 
 	var height int64
@@ -139,7 +141,7 @@ func QueryTendermintHeader(clientCtx client.Context) (ibctmtypes.Header, int64, 
 
 	commit, err := node.Commit(context.Background(), &height)
 	if err != nil {
-		return ibctmtypes.Header{}, 0, err
+		return ibctm.Header{}, 0, err
 	}
 
 	page := 1
@@ -147,16 +149,16 @@ func QueryTendermintHeader(clientCtx client.Context) (ibctmtypes.Header, int64, 
 
 	validators, err := node.Validators(context.Background(), &height, &page, &count)
 	if err != nil {
-		return ibctmtypes.Header{}, 0, err
+		return ibctm.Header{}, 0, err
 	}
 
 	protoCommit := commit.SignedHeader.ToProto()
 	protoValset, err := tmtypes.NewValidatorSet(validators.Validators).ToProto()
 	if err != nil {
-		return ibctmtypes.Header{}, 0, err
+		return ibctm.Header{}, 0, err
 	}
 
-	header := ibctmtypes.Header{
+	header := ibctm.Header{
 		SignedHeader: protoCommit,
 		ValidatorSet: protoValset,
 	}
@@ -166,15 +168,15 @@ func QueryTendermintHeader(clientCtx client.Context) (ibctmtypes.Header, int64, 
 
 // QuerySelfConsensusState takes a client context and returns the appropriate
 // tendermint consensus state
-func QuerySelfConsensusState(clientCtx client.Context) (*ibctmtypes.ConsensusState, int64, error) {
+func QuerySelfConsensusState(clientCtx client.Context) (*ibctm.ConsensusState, int64, error) {
 	node, err := clientCtx.GetNode()
 	if err != nil {
-		return &ibctmtypes.ConsensusState{}, 0, err
+		return &ibctm.ConsensusState{}, 0, err
 	}
 
 	info, err := node.ABCIInfo(context.Background())
 	if err != nil {
-		return &ibctmtypes.ConsensusState{}, 0, err
+		return &ibctm.ConsensusState{}, 0, err
 	}
 
 	var height int64
@@ -186,7 +188,7 @@ func QuerySelfConsensusState(clientCtx client.Context) (*ibctmtypes.ConsensusSta
 
 	commit, err := node.Commit(context.Background(), &height)
 	if err != nil {
-		return &ibctmtypes.ConsensusState{}, 0, err
+		return &ibctm.ConsensusState{}, 0, err
 	}
 
 	page := 1
@@ -195,10 +197,10 @@ func QuerySelfConsensusState(clientCtx client.Context) (*ibctmtypes.ConsensusSta
 	nextHeight := height + 1
 	nextVals, err := node.Validators(context.Background(), &nextHeight, &page, &count)
 	if err != nil {
-		return &ibctmtypes.ConsensusState{}, 0, err
+		return &ibctm.ConsensusState{}, 0, err
 	}
 
-	state := &ibctmtypes.ConsensusState{
+	state := &ibctm.ConsensusState{
 		Timestamp:          commit.Time,
 		Root:               commitmenttypes.NewMerkleRoot(commit.AppHash),
 		NextValidatorsHash: tmtypes.NewValidatorSet(nextVals.Validators).Hash(),

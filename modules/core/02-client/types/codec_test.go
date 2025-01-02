@@ -2,13 +2,13 @@ package types_test
 
 import (
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/cosmos/ibc-go/v6/modules/core/02-client/types"
-	commitmenttypes "github.com/cosmos/ibc-go/v6/modules/core/23-commitment/types"
-	"github.com/cosmos/ibc-go/v6/modules/core/exported"
-	ibctmtypes "github.com/cosmos/ibc-go/v6/modules/light-clients/07-tendermint/types"
-	localhosttypes "github.com/cosmos/ibc-go/v6/modules/light-clients/09-localhost/types"
-	ibctesting "github.com/cosmos/ibc-go/v6/testing"
+	"github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
+	commitmenttypes "github.com/cosmos/ibc-go/v8/modules/core/23-commitment/types"
+	"github.com/cosmos/ibc-go/v8/modules/core/exported"
+	ibctm "github.com/cosmos/ibc-go/v8/modules/light-clients/07-tendermint"
+	ibctesting "github.com/cosmos/ibc-go/v8/testing"
 )
 
 type caseAny struct {
@@ -30,12 +30,7 @@ func (suite *TypesTestSuite) TestPackClientState() {
 		},
 		{
 			"tendermint client",
-			ibctmtypes.NewClientState(chainID, ibctesting.DefaultTrustLevel, ibctesting.TrustingPeriod, ibctesting.UnbondingPeriod, ibctesting.MaxClockDrift, clientHeight, commitmenttypes.GetSDKSpecs(), ibctesting.UpgradePath, false, false),
-			true,
-		},
-		{
-			"localhost client",
-			localhosttypes.NewClientState(chainID, clientHeight),
+			ibctm.NewClientState(suite.chainA.ChainID, ibctesting.DefaultTrustLevel, ibctesting.TrustingPeriod, ibctesting.UnbondingPeriod, ibctesting.MaxClockDrift, clientHeight, commitmenttypes.GetSDKSpecs(), ibctesting.UpgradePath),
 			true,
 		},
 		{
@@ -48,17 +43,20 @@ func (suite *TypesTestSuite) TestPackClientState() {
 	testCasesAny := []caseAny{}
 
 	for _, tc := range testCases {
-		clientAny, err := types.PackClientState(tc.clientState)
+		tc := tc
+		protoAny, err := types.PackClientState(tc.clientState)
 		if tc.expPass {
 			suite.Require().NoError(err, tc.name)
 		} else {
 			suite.Require().Error(err, tc.name)
 		}
 
-		testCasesAny = append(testCasesAny, caseAny{tc.name, clientAny, tc.expPass})
+		testCasesAny = append(testCasesAny, caseAny{tc.name, protoAny, tc.expPass})
 	}
 
 	for i, tc := range testCasesAny {
+		i, tc := i, tc
+
 		cs, err := types.UnpackClientState(tc.any)
 		if tc.expPass {
 			suite.Require().NoError(err, tc.name)
@@ -95,16 +93,19 @@ func (suite *TypesTestSuite) TestPackConsensusState() {
 	testCasesAny := []caseAny{}
 
 	for _, tc := range testCases {
-		clientAny, err := types.PackConsensusState(tc.consensusState)
+		tc := tc
+		protoAny, err := types.PackConsensusState(tc.consensusState)
 		if tc.expPass {
 			suite.Require().NoError(err, tc.name)
 		} else {
 			suite.Require().Error(err, tc.name)
 		}
-		testCasesAny = append(testCasesAny, caseAny{tc.name, clientAny, tc.expPass})
+		testCasesAny = append(testCasesAny, caseAny{tc.name, protoAny, tc.expPass})
 	}
 
 	for i, tc := range testCasesAny {
+		tc := tc
+
 		cs, err := types.UnpackConsensusState(tc.any)
 		if tc.expPass {
 			suite.Require().NoError(err, tc.name)
@@ -115,15 +116,15 @@ func (suite *TypesTestSuite) TestPackConsensusState() {
 	}
 }
 
-func (suite *TypesTestSuite) TestPackHeader() {
+func (suite *TypesTestSuite) TestPackClientMessage() {
 	testCases := []struct {
-		name    string
-		header  exported.Header
-		expPass bool
+		name          string
+		clientMessage exported.ClientMessage
+		expPass       bool
 	}{
 		{
 			"solo machine header",
-			ibctesting.NewSolomachine(suite.T(), suite.chainA.Codec, "solomachine", "", 2).CreateHeader(),
+			ibctesting.NewSolomachine(suite.T(), suite.chainA.Codec, "solomachine", "", 2).CreateHeader("solomachine"),
 			true,
 		},
 		{
@@ -141,70 +142,100 @@ func (suite *TypesTestSuite) TestPackHeader() {
 	testCasesAny := []caseAny{}
 
 	for _, tc := range testCases {
-		clientAny, err := types.PackHeader(tc.header)
+		tc := tc
+		protoAny, err := types.PackClientMessage(tc.clientMessage)
 		if tc.expPass {
 			suite.Require().NoError(err, tc.name)
 		} else {
 			suite.Require().Error(err, tc.name)
 		}
 
-		testCasesAny = append(testCasesAny, caseAny{tc.name, clientAny, tc.expPass})
+		testCasesAny = append(testCasesAny, caseAny{tc.name, protoAny, tc.expPass})
 	}
 
 	for i, tc := range testCasesAny {
-		cs, err := types.UnpackHeader(tc.any)
+		tc := tc
+		cs, err := types.UnpackClientMessage(tc.any)
 		if tc.expPass {
 			suite.Require().NoError(err, tc.name)
-			suite.Require().Equal(testCases[i].header, cs, tc.name)
+			suite.Require().Equal(testCases[i].clientMessage, cs, tc.name)
 		} else {
 			suite.Require().Error(err, tc.name)
 		}
 	}
 }
 
-func (suite *TypesTestSuite) TestPackMisbehaviour() {
+func (suite *TypesTestSuite) TestCodecTypeRegistration() {
 	testCases := []struct {
-		name         string
-		misbehaviour exported.Misbehaviour
-		expPass      bool
+		name    string
+		typeURL string
+		expPass bool
 	}{
 		{
-			"solo machine misbehaviour",
-			ibctesting.NewSolomachine(suite.T(), suite.chainA.Codec, "solomachine", "", 2).CreateMisbehaviour(),
+			"success: MsgCreateClient",
+			sdk.MsgTypeURL(&types.MsgCreateClient{}),
 			true,
 		},
 		{
-			"tendermint misbehaviour",
-			ibctmtypes.NewMisbehaviour("tendermint", suite.chainA.LastHeader, suite.chainA.LastHeader),
+			"success: MsgUpdateClient",
+			sdk.MsgTypeURL(&types.MsgUpdateClient{}),
 			true,
 		},
 		{
-			"nil",
-			nil,
+			"success: MsgUpgradeClient",
+			sdk.MsgTypeURL(&types.MsgUpgradeClient{}),
+			true,
+		},
+		{
+			"success: MsgSubmitMisbehaviour",
+			sdk.MsgTypeURL(&types.MsgSubmitMisbehaviour{}),
+			true,
+		},
+		{
+			"success: MsgRecoverClient",
+			sdk.MsgTypeURL(&types.MsgRecoverClient{}),
+			true,
+		},
+		{
+			"success: MsgIBCSoftwareUpgrade",
+			sdk.MsgTypeURL(&types.MsgIBCSoftwareUpgrade{}),
+			true,
+		},
+		{
+			"success: MsgUpdateParams",
+			sdk.MsgTypeURL(&types.MsgUpdateParams{}),
+			true,
+		},
+		{
+			"success: ClientUpdateProposal",
+			sdk.MsgTypeURL(&types.ClientUpdateProposal{}),
+			true,
+		},
+		{
+			"success: UpgradeProposal",
+			sdk.MsgTypeURL(&types.UpgradeProposal{}),
+			true,
+		},
+		{
+			"type not registered on codec",
+			"ibc.invalid.MsgTypeURL",
 			false,
 		},
 	}
 
-	testCasesAny := []caseAny{}
-
 	for _, tc := range testCases {
-		clientAny, err := types.PackMisbehaviour(tc.misbehaviour)
-		if tc.expPass {
-			suite.Require().NoError(err, tc.name)
-		} else {
-			suite.Require().Error(err, tc.name)
-		}
+		tc := tc
 
-		testCasesAny = append(testCasesAny, caseAny{tc.name, clientAny, tc.expPass})
-	}
+		suite.Run(tc.name, func() {
+			msg, err := suite.chainA.GetSimApp().AppCodec().InterfaceRegistry().Resolve(tc.typeURL)
 
-	for i, tc := range testCasesAny {
-		cs, err := types.UnpackMisbehaviour(tc.any)
-		if tc.expPass {
-			suite.Require().NoError(err, tc.name)
-			suite.Require().Equal(testCases[i].misbehaviour, cs, tc.name)
-		} else {
-			suite.Require().Error(err, tc.name)
-		}
+			if tc.expPass {
+				suite.Require().NotNil(msg)
+				suite.Require().NoError(err)
+			} else {
+				suite.Require().Nil(msg)
+				suite.Require().Error(err)
+			}
+		})
 	}
 }
