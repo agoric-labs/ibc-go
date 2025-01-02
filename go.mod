@@ -190,7 +190,7 @@ require (
 )
 
 replace (
-	github.com/cosmos/cosmos-sdk => github.com/agoric-labs/cosmos-sdk v0.46.16-alpha.agoric.2.4
+	github.com/cosmos/cosmos-sdk => github.com/agoric-labs/cosmos-sdk v0.46.16-alpha.agoric.2.4.0.20241231161927-03ea5e469b71
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 	github.com/tendermint/tendermint => github.com/agoric-labs/cometbft v0.34.30-alpha.agoric.1
 	github.com/syndtr/goleveldb => github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
