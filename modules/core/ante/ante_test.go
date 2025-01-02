@@ -3,20 +3,21 @@ package ante_test
 import (
 	"testing"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
+	testifysuite "github.com/stretchr/testify/suite"
 
-	clienttypes "github.com/cosmos/ibc-go/v6/modules/core/02-client/types"
-	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
-	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
-	"github.com/cosmos/ibc-go/v6/modules/core/ante"
-	"github.com/cosmos/ibc-go/v6/modules/core/exported"
-	ibctesting "github.com/cosmos/ibc-go/v6/testing"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
+	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
+	host "github.com/cosmos/ibc-go/v8/modules/core/24-host"
+	"github.com/cosmos/ibc-go/v8/modules/core/ante"
+	"github.com/cosmos/ibc-go/v8/modules/core/exported"
+	ibctesting "github.com/cosmos/ibc-go/v8/testing"
 )
 
 type AnteTestSuite struct {
-	suite.Suite
+	testifysuite.Suite
 
 	coordinator *ibctesting.Coordinator
 
@@ -41,18 +42,18 @@ func (suite *AnteTestSuite) SetupTest() {
 
 // TestAnteTestSuite runs all the tests within this package.
 func TestAnteTestSuite(t *testing.T) {
-	suite.Run(t, new(AnteTestSuite))
+	testifysuite.Run(t, new(AnteTestSuite))
 }
 
 // createRecvPacketMessage creates a RecvPacket message for a packet sent from chain A to chain B.
 func (suite *AnteTestSuite) createRecvPacketMessage(isRedundant bool) sdk.Msg {
-	sequence, err := suite.path.EndpointA.SendPacket(clienttypes.NewHeight(1, 0), 0, ibctesting.MockPacketData)
+	sequence, err := suite.path.EndpointA.SendPacket(clienttypes.NewHeight(2, 0), 0, ibctesting.MockPacketData)
 	suite.Require().NoError(err)
 
 	packet := channeltypes.NewPacket(ibctesting.MockPacketData, sequence,
 		suite.path.EndpointA.ChannelConfig.PortID, suite.path.EndpointA.ChannelID,
 		suite.path.EndpointB.ChannelConfig.PortID, suite.path.EndpointB.ChannelID,
-		clienttypes.NewHeight(1, 0), 0)
+		clienttypes.NewHeight(2, 0), 0)
 
 	if isRedundant {
 		err = suite.path.EndpointB.RecvPacket(packet)
@@ -70,13 +71,13 @@ func (suite *AnteTestSuite) createRecvPacketMessage(isRedundant bool) sdk.Msg {
 
 // createAcknowledgementMessage creates an Acknowledgement message for a packet sent from chain B to chain A.
 func (suite *AnteTestSuite) createAcknowledgementMessage(isRedundant bool) sdk.Msg {
-	sequence, err := suite.path.EndpointB.SendPacket(clienttypes.NewHeight(1, 0), 0, ibctesting.MockPacketData)
+	sequence, err := suite.path.EndpointB.SendPacket(clienttypes.NewHeight(2, 0), 0, ibctesting.MockPacketData)
 	suite.Require().NoError(err)
 
 	packet := channeltypes.NewPacket(ibctesting.MockPacketData, sequence,
 		suite.path.EndpointB.ChannelConfig.PortID, suite.path.EndpointB.ChannelID,
 		suite.path.EndpointA.ChannelConfig.PortID, suite.path.EndpointA.ChannelID,
-		clienttypes.NewHeight(1, 0), 0)
+		clienttypes.NewHeight(2, 0), 0)
 	err = suite.path.EndpointA.RecvPacket(packet)
 	suite.Require().NoError(err)
 
@@ -127,7 +128,7 @@ func (suite *AnteTestSuite) createTimeoutOnCloseMessage(isRedundant bool) sdk.Ms
 
 	sequence, err := suite.path.EndpointB.SendPacket(timeoutHeight, 0, ibctesting.MockPacketData)
 	suite.Require().NoError(err)
-	err = suite.path.EndpointA.SetChannelClosed()
+	err = suite.path.EndpointA.SetChannelState(channeltypes.CLOSED)
 	suite.Require().NoError(err)
 
 	packet := channeltypes.NewPacket(ibctesting.MockPacketData, sequence,
@@ -155,7 +156,7 @@ func (suite *AnteTestSuite) createUpdateClientMessage() sdk.Msg {
 	// ensure counterparty has committed state
 	endpoint.Chain.Coordinator.CommitBlock(endpoint.Counterparty.Chain)
 
-	var header exported.Header
+	var header exported.ClientMessage
 
 	switch endpoint.ClientConfig.GetClientType() {
 	case exported.Tendermint:
@@ -168,7 +169,7 @@ func (suite *AnteTestSuite) createUpdateClientMessage() sdk.Msg {
 		endpoint.ClientID, header,
 		endpoint.Chain.SenderAccount.GetAddress().String(),
 	)
-	require.NoError(endpoint.Chain.T, err)
+	require.NoError(endpoint.Chain.TB, err)
 
 	return msg
 }
@@ -336,7 +337,7 @@ func (suite *AnteTestSuite) TestAnteDecorator() {
 				}
 
 				// append non packet and update message to msgs to ensure multimsg tx should pass
-				msgs = append(msgs, &clienttypes.MsgSubmitMisbehaviour{})
+				msgs = append(msgs, &clienttypes.MsgSubmitMisbehaviour{}) //nolint:staticcheck // we're using the deprecated message for testing
 				return msgs
 			},
 			true,
@@ -417,7 +418,7 @@ func (suite *AnteTestSuite) TestAnteDecorator() {
 				packet := channeltypes.NewPacket(ibctesting.MockPacketData, 2,
 					suite.path.EndpointA.ChannelConfig.PortID, suite.path.EndpointA.ChannelID,
 					suite.path.EndpointB.ChannelConfig.PortID, suite.path.EndpointB.ChannelID,
-					clienttypes.NewHeight(1, 0), 0)
+					clienttypes.NewHeight(2, 0), 0)
 
 				return []sdk.Msg{
 					suite.createRecvPacketMessage(false),

@@ -1,12 +1,14 @@
 package types_test
 
 import (
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/authz"
+	sdkmath "cosmossdk.io/math"
 
-	"github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
-	ibctesting "github.com/cosmos/ibc-go/v6/testing"
-	"github.com/cosmos/ibc-go/v6/testing/mock"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	authz "github.com/cosmos/cosmos-sdk/x/authz"
+
+	"github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
+	ibctesting "github.com/cosmos/ibc-go/v8/testing"
+	"github.com/cosmos/ibc-go/v8/testing/mock"
 )
 
 func (suite *TypesTestSuite) TestTransferAuthorizationAccept() {
@@ -34,7 +36,7 @@ func (suite *TypesTestSuite) TestTransferAuthorizationAccept() {
 		{
 			"success: with spend limit updated",
 			func() {
-				msgTransfer.Token = sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(50))
+				msgTransfer.Token = sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(50))
 			},
 			func(res authz.AcceptResponse, err error) {
 				suite.Require().NoError(err)
@@ -45,7 +47,7 @@ func (suite *TypesTestSuite) TestTransferAuthorizationAccept() {
 				updatedAuthz, ok := res.Updated.(*types.TransferAuthorization)
 				suite.Require().True(ok)
 
-				isEqual := updatedAuthz.Allocations[0].SpendLimit.IsEqual(sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(50))))
+				isEqual := updatedAuthz.Allocations[0].SpendLimit.Equal(sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(50))))
 				suite.Require().True(isEqual)
 			},
 		},
@@ -104,11 +106,11 @@ func (suite *TypesTestSuite) TestTransferAuthorizationAccept() {
 			func() {
 				transferAuthz.Allocations[0].SpendLimit = transferAuthz.Allocations[0].SpendLimit.Add(
 					sdk.NewCoins(
-						sdk.NewCoin("test-denom", sdk.NewInt(100)),
-						sdk.NewCoin("test-denom2", sdk.NewInt(100)),
+						sdk.NewCoin("test-denom", sdkmath.NewInt(100)),
+						sdk.NewCoin("test-denom2", sdkmath.NewInt(100)),
 					)...,
 				)
-				msgTransfer.Token = sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(50))
+				msgTransfer.Token = sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(50))
 			},
 			func(res authz.AcceptResponse, err error) {
 				suite.Require().NoError(err)
@@ -117,13 +119,13 @@ func (suite *TypesTestSuite) TestTransferAuthorizationAccept() {
 				suite.Require().True(ok)
 
 				remainder := updatedTransferAuthz.Allocations[0].SpendLimit.AmountOf(sdk.DefaultBondDenom)
-				suite.Require().True(sdk.NewInt(50).Equal(remainder))
+				suite.Require().True(sdkmath.NewInt(50).Equal(remainder))
 
 				remainder = updatedTransferAuthz.Allocations[0].SpendLimit.AmountOf("test-denom")
-				suite.Require().True(sdk.NewInt(100).Equal(remainder))
+				suite.Require().True(sdkmath.NewInt(100).Equal(remainder))
 
 				remainder = updatedTransferAuthz.Allocations[0].SpendLimit.AmountOf("test-denom2")
-				suite.Require().True(sdk.NewInt(100).Equal(remainder))
+				suite.Require().True(sdkmath.NewInt(100).Equal(remainder))
 			},
 		},
 		{
@@ -139,7 +141,7 @@ func (suite *TypesTestSuite) TestTransferAuthorizationAccept() {
 		{
 			"requested transfer amount is more than the spend limit",
 			func() {
-				msgTransfer.Token = sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(1000))
+				msgTransfer.Token = sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(1000))
 			},
 			func(res authz.AcceptResponse, err error) {
 				suite.Require().Error(err)
@@ -157,6 +159,8 @@ func (suite *TypesTestSuite) TestTransferAuthorizationAccept() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
 
@@ -222,7 +226,7 @@ func (suite *TypesTestSuite) TestTransferAuthorizationValidateBasic() {
 				allocation := types.Allocation{
 					SourcePort:    types.PortID,
 					SourceChannel: "channel-1",
-					SpendLimit:    sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(100))),
+					SpendLimit:    sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(100))),
 					AllowList:     []string{},
 				}
 
@@ -292,7 +296,7 @@ func (suite *TypesTestSuite) TestTransferAuthorizationValidateBasic() {
 				allocation := types.Allocation{
 					SourcePort:    mock.PortID,
 					SourceChannel: transferAuthz.Allocations[0].SourceChannel,
-					SpendLimit:    sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(100))),
+					SpendLimit:    sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(100))),
 					AllowList:     []string{ibctesting.TestAccAddress},
 				}
 
@@ -303,13 +307,15 @@ func (suite *TypesTestSuite) TestTransferAuthorizationValidateBasic() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		suite.Run(tc.name, func() {
 			transferAuthz = types.TransferAuthorization{
 				Allocations: []types.Allocation{
 					{
 						SourcePort:    mock.PortID,
 						SourceChannel: ibctesting.FirstChannelID,
-						SpendLimit:    sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(100))),
+						SpendLimit:    sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(100))),
 						AllowList:     []string{ibctesting.TestAccAddress},
 					},
 				},

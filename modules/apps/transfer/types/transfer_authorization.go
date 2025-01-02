@@ -1,19 +1,23 @@
 package types
 
 import (
+	"context"
 	"math/big"
 
+	"github.com/cosmos/gogoproto/proto"
+
+	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/x/authz"
 
-	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
-	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
+	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
+	host "github.com/cosmos/ibc-go/v8/modules/core/24-host"
+	ibcerrors "github.com/cosmos/ibc-go/v8/modules/core/errors"
 )
 
-var _ authz.Authorization = &TransferAuthorization{}
+var _ authz.Authorization = (*TransferAuthorization)(nil)
 
 // maxUint256 is the maximum value for a 256 bit unsigned integer.
 var maxUint256 = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
@@ -26,15 +30,15 @@ func NewTransferAuthorization(allocations ...Allocation) *TransferAuthorization 
 }
 
 // MsgTypeURL implements Authorization.MsgTypeURL.
-func (a TransferAuthorization) MsgTypeURL() string {
+func (TransferAuthorization) MsgTypeURL() string {
 	return sdk.MsgTypeURL(&MsgTransfer{})
 }
 
 // Accept implements Authorization.Accept.
-func (a TransferAuthorization) Accept(ctx sdk.Context, msg sdk.Msg) (authz.AcceptResponse, error) {
+func (a TransferAuthorization) Accept(ctx context.Context, msg proto.Message) (authz.AcceptResponse, error) {
 	msgTransfer, ok := msg.(*MsgTransfer)
 	if !ok {
-		return authz.AcceptResponse{}, sdkerrors.Wrap(sdkerrors.ErrInvalidType, "type mismatch")
+		return authz.AcceptResponse{}, errorsmod.Wrap(ibcerrors.ErrInvalidType, "type mismatch")
 	}
 
 	for index, allocation := range a.Allocations {
@@ -42,8 +46,8 @@ func (a TransferAuthorization) Accept(ctx sdk.Context, msg sdk.Msg) (authz.Accep
 			continue
 		}
 
-		if !isAllowedAddress(ctx, msgTransfer.Receiver, allocation.AllowList) {
-			return authz.AcceptResponse{}, sdkerrors.Wrap(sdkerrors.ErrInvalidAddress, "not allowed receiver address for transfer")
+		if !isAllowedAddress(sdk.UnwrapSDKContext(ctx), msgTransfer.Receiver, allocation.AllowList) {
+			return authz.AcceptResponse{}, errorsmod.Wrap(ibcerrors.ErrInvalidAddress, "not allowed receiver address for transfer")
 		}
 
 		// If the spend limit is set to the MaxUint256 sentinel value, do not subtract the amount from the spend limit.
@@ -53,7 +57,7 @@ func (a TransferAuthorization) Accept(ctx sdk.Context, msg sdk.Msg) (authz.Accep
 
 		limitLeft, isNegative := allocation.SpendLimit.SafeSub(msgTransfer.Token)
 		if isNegative {
-			return authz.AcceptResponse{}, sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, "requested amount is more than spend limit")
+			return authz.AcceptResponse{}, errorsmod.Wrapf(ibcerrors.ErrInsufficientFunds, "requested amount is more than spend limit")
 		}
 
 		if limitLeft.IsZero() {
@@ -77,44 +81,44 @@ func (a TransferAuthorization) Accept(ctx sdk.Context, msg sdk.Msg) (authz.Accep
 		}}, nil
 	}
 
-	return authz.AcceptResponse{}, sdkerrors.Wrapf(sdkerrors.ErrNotFound, "requested port and channel allocation does not exist")
+	return authz.AcceptResponse{}, errorsmod.Wrapf(ibcerrors.ErrNotFound, "requested port and channel allocation does not exist")
 }
 
 // ValidateBasic implements Authorization.ValidateBasic.
 func (a TransferAuthorization) ValidateBasic() error {
 	if len(a.Allocations) == 0 {
-		return sdkerrors.Wrap(ErrInvalidAuthorization, "allocations cannot be empty")
+		return errorsmod.Wrap(ErrInvalidAuthorization, "allocations cannot be empty")
 	}
 
 	foundChannels := make(map[string]bool, 0)
 
 	for _, allocation := range a.Allocations {
 		if _, found := foundChannels[allocation.SourceChannel]; found {
-			return sdkerrors.Wrapf(channeltypes.ErrInvalidChannel, "duplicate source channel ID: %s", allocation.SourceChannel)
+			return errorsmod.Wrapf(channeltypes.ErrInvalidChannel, "duplicate source channel ID: %s", allocation.SourceChannel)
 		}
 
 		foundChannels[allocation.SourceChannel] = true
 
 		if allocation.SpendLimit == nil {
-			return sdkerrors.Wrap(sdkerrors.ErrInvalidCoins, "spend limit cannot be nil")
+			return errorsmod.Wrap(ibcerrors.ErrInvalidCoins, "spend limit cannot be nil")
 		}
 
 		if err := allocation.SpendLimit.Validate(); err != nil {
-			return sdkerrors.Wrapf(sdkerrors.ErrInvalidCoins, err.Error())
+			return errorsmod.Wrapf(ibcerrors.ErrInvalidCoins, err.Error())
 		}
 
 		if err := host.PortIdentifierValidator(allocation.SourcePort); err != nil {
-			return sdkerrors.Wrap(err, "invalid source port ID")
+			return errorsmod.Wrap(err, "invalid source port ID")
 		}
 
 		if err := host.ChannelIdentifierValidator(allocation.SourceChannel); err != nil {
-			return sdkerrors.Wrap(err, "invalid source channel ID")
+			return errorsmod.Wrap(err, "invalid source channel ID")
 		}
 
 		found := make(map[string]bool, 0)
 		for i := 0; i < len(allocation.AllowList); i++ {
 			if found[allocation.AllowList[i]] {
-				return sdkerrors.Wrapf(ErrInvalidAuthorization, "duplicate entry in allow list %s")
+				return errorsmod.Wrapf(ErrInvalidAuthorization, "duplicate entry in allow list %s", allocation.AllowList[i])
 			}
 			found[allocation.AllowList[i]] = true
 		}
@@ -147,5 +151,5 @@ func isAllowedAddress(ctx sdk.Context, receiver string, allowedAddrs []string) b
 // will be granted the privilege to do ICS20 token transfers for the total amount
 // of the denomination available at the granter's account.
 func UnboundedSpendLimit() sdkmath.Int {
-	return sdk.NewIntFromBigInt(maxUint256)
+	return sdkmath.NewIntFromBigInt(maxUint256)
 }
