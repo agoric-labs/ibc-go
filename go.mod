@@ -13,7 +13,7 @@ require (
 	github.com/armon/go-metrics v0.4.1
 	github.com/confio/ics23/go v0.9.0
 	github.com/cosmos/cosmos-proto v1.0.0-alpha8 // indirect
-	github.com/cosmos/cosmos-sdk v0.50.11
+	github.com/cosmos/cosmos-sdk v0.46.12
 	github.com/gogo/protobuf v1.3.3
 	github.com/golang/protobuf v1.5.3
 	github.com/gorilla/mux v1.8.0
@@ -168,13 +168,7 @@ require (
 )
 
 replace (
-	github.com/cosmos/cosmos-sdk => github.com/agoric-labs/cosmos-sdk v0.46.16-alpha.agoric.2.4.0.20241231161927-03ea5e469b71
+	github.com/cosmos/cosmos-sdk => github.com/agoric-labs/cosmos-sdk v0.46.16-alpha.agoric.2.4
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 	github.com/tendermint/tendermint => github.com/agoric-labs/cometbft v0.34.30-alpha.agoric.1
-	github.com/cosmos/cosmos-sdk/store => cosmossdk.io/store v1.1.1
-	github.com/cosmos/cosmos-sdk/x/evidence => cosmossdk.io/x/evidence v0.1.1
-	github.com/cosmos/cosmos-sdk/x/feegrant => cosmossdk.io/x/feegrant v0.1.1
-	github.com/cosmos/cosmos-sdk/x/upgrade => cosmossdk.io/x/upgrade v0.1.4
-	cosmossdk.io/x/evidence => github.com/cosmos/cosmos-sdk/x/evidence v0.1.1
-
 )
