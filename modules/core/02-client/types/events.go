@@ -3,7 +3,7 @@ package types
 import (
 	"fmt"
 
-	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
+	ibcexported "github.com/cosmos/ibc-go/v8/modules/core/exported"
 )
 
 // IBC client events
@@ -12,19 +12,22 @@ const (
 	AttributeKeySubjectClientID   = "subject_client_id"
 	AttributeKeyClientType        = "client_type"
 	AttributeKeyConsensusHeight   = "consensus_height"
+	AttributeKeyConsensusHeights  = "consensus_heights"
 	AttributeKeyHeader            = "header"
+	AttributeKeyUpgradeStore      = "upgrade_store"
+	AttributeKeyUpgradePlanHeight = "upgrade_plan_height"
 	AttributeKeyUpgradePlanTitle  = "title"
-	AttributeKeyUpgradePlanHeight = "height"
 )
 
 // IBC client events vars
 var (
-	EventTypeCreateClient          = "create_client"
-	EventTypeUpdateClient          = "update_client"
-	EventTypeUpgradeClient         = "upgrade_client"
-	EventTypeSubmitMisbehaviour    = "client_misbehaviour"
-	EventTypeUpdateClientProposal  = "update_client_proposal"
-	EventTypeUpgradeClientProposal = "upgrade_client_proposal"
+	EventTypeCreateClient               = "create_client"
+	EventTypeUpdateClient               = "update_client"
+	EventTypeUpgradeClient              = "upgrade_client"
+	EventTypeSubmitMisbehaviour         = "client_misbehaviour"
+	EventTypeRecoverClient              = "recover_client"
+	EventTypeScheduleIBCSoftwareUpgrade = "schedule_ibc_software_upgrade"
+	EventTypeUpgradeChain               = "upgrade_chain"
 
-	AttributeValueCategory = fmt.Sprintf("%s_%s", host.ModuleName, SubModuleName)
+	AttributeValueCategory = fmt.Sprintf("%s_%s", ibcexported.ModuleName, SubModuleName)
 )

@@ -3,17 +3,27 @@ package types
 import (
 	"strings"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	errorsmod "cosmossdk.io/errors"
 
-	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
-	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
+	host "github.com/cosmos/ibc-go/v8/modules/core/24-host"
+	ibcerrors "github.com/cosmos/ibc-go/v8/modules/core/errors"
 )
 
-// msg types
-const (
-	TypeMsgPayPacketFee      = "payPacketFee"
-	TypeMsgPayPacketFeeAsync = "payPacketFeeAsync"
+const MaximumCounterpartyPayeeLength = 2048 // maximum length of the counterparty payee in bytes (value chosen arbitrarily)
+
+var (
+	_ sdk.Msg = (*MsgRegisterPayee)(nil)
+	_ sdk.Msg = (*MsgRegisterCounterpartyPayee)(nil)
+	_ sdk.Msg = (*MsgPayPacketFee)(nil)
+	_ sdk.Msg = (*MsgPayPacketFeeAsync)(nil)
+
+	_ sdk.HasValidateBasic = (*MsgRegisterPayee)(nil)
+	_ sdk.HasValidateBasic = (*MsgRegisterCounterpartyPayee)(nil)
+	_ sdk.HasValidateBasic = (*MsgPayPacketFee)(nil)
+	_ sdk.HasValidateBasic = (*MsgPayPacketFeeAsync)(nil)
 )
 
 // NewMsgRegisterPayee creates a new instance of MsgRegisterPayee
@@ -36,18 +46,14 @@ func (msg MsgRegisterPayee) ValidateBasic() error {
 		return err
 	}
 
-	if msg.Relayer == msg.Payee {
-		return sdkerrors.Wrap(sdkerrors.ErrInvalidRequest, "relayer address and payee must not be equal")
-	}
-
 	_, err := sdk.AccAddressFromBech32(msg.Relayer)
 	if err != nil {
-		return sdkerrors.Wrap(err, "failed to create sdk.AccAddress from relayer address")
+		return errorsmod.Wrap(err, "failed to create sdk.AccAddress from relayer address")
 	}
 
 	_, err = sdk.AccAddressFromBech32(msg.Payee)
 	if err != nil {
-		return sdkerrors.Wrap(err, "failed to create sdk.AccAddress from payee address")
+		return errorsmod.Wrap(err, "failed to create sdk.AccAddress from payee address")
 	}
 
 	return nil
@@ -85,11 +91,15 @@ func (msg MsgRegisterCounterpartyPayee) ValidateBasic() error {
 
 	_, err := sdk.AccAddressFromBech32(msg.Relayer)
 	if err != nil {
-		return sdkerrors.Wrap(err, "failed to create sdk.AccAddress from relayer address")
+		return errorsmod.Wrap(err, "failed to create sdk.AccAddress from relayer address")
 	}
 
 	if strings.TrimSpace(msg.CounterpartyPayee) == "" {
 		return ErrCounterpartyPayeeEmpty
+	}
+
+	if len(msg.CounterpartyPayee) > MaximumCounterpartyPayeeLength {
+		return errorsmod.Wrapf(ibcerrors.ErrInvalidAddress, "counterparty payee address must not exceed %d bytes", MaximumCounterpartyPayeeLength)
 	}
 
 	return nil
@@ -130,7 +140,7 @@ func (msg MsgPayPacketFee) ValidateBasic() error {
 
 	// signer check
 	if _, err := sdk.AccAddressFromBech32(msg.Signer); err != nil {
-		return sdkerrors.Wrap(err, "failed to convert msg.Signer into sdk.AccAddress")
+		return errorsmod.Wrap(err, "failed to convert msg.Signer into sdk.AccAddress")
 	}
 
 	// enforce relayer is not set
@@ -138,11 +148,7 @@ func (msg MsgPayPacketFee) ValidateBasic() error {
 		return ErrRelayersNotEmpty
 	}
 
-	if err := msg.Fee.Validate(); err != nil {
-		return err
-	}
-
-	return nil
+	return msg.Fee.Validate()
 }
 
 // GetSigners implements sdk.Msg
@@ -152,21 +158,6 @@ func (msg MsgPayPacketFee) GetSigners() []sdk.AccAddress {
 		panic(err)
 	}
 	return []sdk.AccAddress{signer}
-}
-
-// Route implements sdk.Msg
-func (msg MsgPayPacketFee) Route() string {
-	return RouterKey
-}
-
-// Type implements sdk.Msg
-func (msg MsgPayPacketFee) Type() string {
-	return TypeMsgPayPacketFee
-}
-
-// GetSignBytes implements sdk.Msg.
-func (msg MsgPayPacketFee) GetSignBytes() []byte {
-	return sdk.MustSortJSON(AminoCdc.MustMarshalJSON(&msg))
 }
 
 // NewMsgPayPacketAsync creates a new instance of MsgPayPacketFee
@@ -183,11 +174,7 @@ func (msg MsgPayPacketFeeAsync) ValidateBasic() error {
 		return err
 	}
 
-	if err := msg.PacketFee.Validate(); err != nil {
-		return err
-	}
-
-	return nil
+	return msg.PacketFee.Validate()
 }
 
 // GetSigners implements sdk.Msg
@@ -198,19 +185,4 @@ func (msg MsgPayPacketFeeAsync) GetSigners() []sdk.AccAddress {
 		panic(err)
 	}
 	return []sdk.AccAddress{signer}
-}
-
-// Route implements sdk.Msg
-func (msg MsgPayPacketFeeAsync) Route() string {
-	return RouterKey
-}
-
-// Type implements sdk.Msg
-func (msg MsgPayPacketFeeAsync) Type() string {
-	return TypeMsgPayPacketFeeAsync
-}
-
-// GetSignBytes implements sdk.Msg.
-func (msg MsgPayPacketFeeAsync) GetSignBytes() []byte {
-	return sdk.MustSortJSON(AminoCdc.MustMarshalJSON(&msg))
 }

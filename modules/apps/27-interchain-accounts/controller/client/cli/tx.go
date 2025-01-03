@@ -5,19 +5,24 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc-go/v6/modules/apps/27-interchain-accounts/controller/types"
-	icatypes "github.com/cosmos/ibc-go/v6/modules/apps/27-interchain-accounts/types"
+	"github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller/types"
+	icatypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/types"
+	connectiontypes "github.com/cosmos/ibc-go/v8/modules/core/03-connection/types"
+	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
 )
 
 const (
 	// The controller chain channel version
-	flagVersion               = "version"
+	flagVersion = "version"
+	// The channel ordering
+	flagOrdering              = "ordering"
 	flagRelativePacketTimeout = "relative-packet-timeout"
 )
 
@@ -28,8 +33,8 @@ func newRegisterInterchainAccountCmd() *cobra.Command {
 		Long: strings.TrimSpace(`Register an account on the counterparty chain via the 
 connection id from the source chain. Connection identifier should be for the source chain 
 and the interchain account will be created on the counterparty chain. Callers are expected to 
-provide the appropriate application version string via {version} flag. Generates a new 
-port identifier using the provided owner string, binds to the port identifier and claims 
+provide the appropriate application version string via {version} flag and the desired ordering
+via the {ordering} flag. Generates a new port identifier using the provided owner string, binds to the port identifier and claims 
 the associated capability.`),
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -45,13 +50,19 @@ the associated capability.`),
 				return err
 			}
 
-			msg := types.NewMsgRegisterInterchainAccount(connectionID, owner, version)
+			ordering, err := parseOrdering(cmd)
+			if err != nil {
+				return err
+			}
+
+			msg := types.NewMsgRegisterInterchainAccountWithOrdering(connectionID, owner, version, ordering)
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
 		},
 	}
 
 	cmd.Flags().String(flagVersion, "", "Controller chain channel version")
+	cmd.Flags().String(flagOrdering, channeltypes.UNORDERED.String(), fmt.Sprintf("Channel ordering, can be one of: %s", strings.Join(connectiontypes.SupportedOrderings, ", ")))
 	flags.AddTxFlagsToCmd(cmd)
 
 	return cmd
@@ -79,7 +90,6 @@ appropriate relative timeoutTimestamp must be provided with flag {relative-packe
 			var icaMsgData icatypes.InterchainAccountPacketData
 			msgContentOrFileName := args[1]
 			if err := cdc.UnmarshalJSON([]byte(msgContentOrFileName), &icaMsgData); err != nil {
-
 				// check for file path if JSON input is not provided
 				contents, err := os.ReadFile(msgContentOrFileName)
 				if err != nil {
@@ -106,4 +116,19 @@ appropriate relative timeoutTimestamp must be provided with flag {relative-packe
 	flags.AddTxFlagsToCmd(cmd)
 
 	return cmd
+}
+
+// parseOrdering gets the channel ordering from the flags.
+func parseOrdering(cmd *cobra.Command) (channeltypes.Order, error) {
+	orderString, err := cmd.Flags().GetString(flagOrdering)
+	if err != nil {
+		return channeltypes.NONE, err
+	}
+
+	order, found := channeltypes.Order_value[strings.ToUpper(orderString)]
+	if !found {
+		return channeltypes.NONE, fmt.Errorf("invalid channel ordering: %s", orderString)
+	}
+
+	return channeltypes.Order(order), nil
 }
