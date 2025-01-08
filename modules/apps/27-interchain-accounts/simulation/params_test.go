@@ -7,14 +7,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	controllertypes "github.com/cosmos/ibc-go/v6/modules/apps/27-interchain-accounts/controller/types"
-	hosttypes "github.com/cosmos/ibc-go/v6/modules/apps/27-interchain-accounts/host/types"
-	"github.com/cosmos/ibc-go/v6/modules/apps/27-interchain-accounts/simulation"
-	"github.com/cosmos/ibc-go/v6/testing/simapp"
+	controllertypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller/types"
+	hosttypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/host/types"
+	"github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/simulation"
+	"github.com/cosmos/ibc-go/v8/testing/simapp"
 )
 
 func TestParamChanges(t *testing.T) {
-	app := simapp.Setup(false)
+	app := simapp.Setup(t, false)
 
 	s := rand.NewSource(1)
 	r := rand.New(s)

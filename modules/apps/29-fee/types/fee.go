@@ -3,10 +3,12 @@ package types
 import (
 	"strings"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	errorsmod "cosmossdk.io/errors"
 
-	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
+	ibcerrors "github.com/cosmos/ibc-go/v8/modules/core/errors"
 )
 
 // NewPacketFee creates and returns a new PacketFee struct including the incentivization fees, refund address and relayers
@@ -22,7 +24,7 @@ func NewPacketFee(fee Fee, refundAddr string, relayers []string) PacketFee {
 func (p PacketFee) Validate() error {
 	_, err := sdk.AccAddressFromBech32(p.RefundAddress)
 	if err != nil {
-		return sdkerrors.Wrap(err, "failed to convert RefundAddress into sdk.AccAddress")
+		return errorsmod.Wrap(err, "failed to convert RefundAddress into sdk.AccAddress")
 	}
 
 	// enforce relayers are not set
@@ -30,11 +32,7 @@ func (p PacketFee) Validate() error {
 		return ErrRelayersNotEmpty
 	}
 
-	if err := p.Fee.Validate(); err != nil {
-		return err
-	}
-
-	return nil
+	return p.Fee.Validate()
 }
 
 // NewPacketFees creates and returns a new PacketFees struct including a list of type PacketFee
@@ -61,9 +59,12 @@ func NewFee(recvFee, ackFee, timeoutFee sdk.Coins) Fee {
 	}
 }
 
-// Total returns the total amount for a given Fee
+// Total returns the total amount for a given Fee.
+// The total amount is the Max(RecvFee + AckFee, TimeoutFee),
+// This is because either the packet is received and acknowledged or it timeouts
 func (f Fee) Total() sdk.Coins {
-	return f.RecvFee.Add(f.AckFee...).Add(f.TimeoutFee...)
+	// maximum returns the denomwise maximum of two sets of coins
+	return f.RecvFee.Add(f.AckFee...).Max(f.TimeoutFee)
 }
 
 // Validate asserts that each Fee is valid and all three Fees are not empty or zero
@@ -80,12 +81,12 @@ func (f Fee) Validate() error {
 	}
 
 	if len(errFees) > 0 {
-		return sdkerrors.Wrapf(sdkerrors.ErrInvalidCoins, "contains invalid fees: %s", strings.Join(errFees, " , "))
+		return errorsmod.Wrapf(ibcerrors.ErrInvalidCoins, "contains invalid fees: %s", strings.Join(errFees, " , "))
 	}
 
 	// if all three fee's are zero or empty return an error
 	if f.AckFee.IsZero() && f.RecvFee.IsZero() && f.TimeoutFee.IsZero() {
-		return sdkerrors.Wrap(sdkerrors.ErrInvalidCoins, "all fees are zero")
+		return errorsmod.Wrap(ibcerrors.ErrInvalidCoins, "all fees are zero")
 	}
 
 	return nil

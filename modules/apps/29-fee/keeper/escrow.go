@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"fmt"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	errorsmod "cosmossdk.io/errors"
 
-	"github.com/cosmos/ibc-go/v6/modules/apps/29-fee/types"
-	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	"github.com/cosmos/ibc-go/v8/modules/apps/29-fee/types"
+	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
 )
 
 // escrowPacketFee sends the packet fee to the 29-fee module account to hold in escrow
@@ -21,7 +22,7 @@ func (k Keeper) escrowPacketFee(ctx sdk.Context, packetID channeltypes.PacketId,
 
 	refundAcc := k.authKeeper.GetAccount(ctx, refundAddr)
 	if refundAcc == nil {
-		return sdkerrors.Wrapf(types.ErrRefundAccNotFound, "account with address: %s not found", packetFee.RefundAddress)
+		return errorsmod.Wrapf(types.ErrRefundAccNotFound, "account with address: %s not found", packetFee.RefundAddress)
 	}
 
 	coins := packetFee.Fee.Total()
@@ -39,7 +40,7 @@ func (k Keeper) escrowPacketFee(ctx sdk.Context, packetID channeltypes.PacketId,
 	packetFees := types.NewPacketFees(fees)
 	k.SetFeesInEscrow(ctx, packetID, packetFees)
 
-	EmitIncentivizedPacketEvent(ctx, packetID, packetFees)
+	emitIncentivizedPacketEvent(ctx, packetID, packetFees)
 
 	return nil
 }
@@ -68,7 +69,7 @@ func (k Keeper) DistributePacketFeesOnAcknowledgement(ctx sdk.Context, forwardRe
 		// check if refundAcc address works
 		refundAddr, err := sdk.AccAddressFromBech32(packetFee.RefundAddress)
 		if err != nil {
-			panic(fmt.Sprintf("could not parse refundAcc %s to sdk.AccAddress", packetFee.RefundAddress))
+			panic(fmt.Errorf("could not parse refundAcc %s to sdk.AccAddress", packetFee.RefundAddress))
 		}
 
 		k.distributePacketFeeOnAcknowledgement(cacheCtx, refundAddr, forwardAddr, reverseRelayer, packetFee)
@@ -96,8 +97,9 @@ func (k Keeper) distributePacketFeeOnAcknowledgement(ctx sdk.Context, refundAddr
 	// distribute fee for reverse relaying
 	k.distributeFee(ctx, reverseRelayer, refundAddr, packetFee.Fee.AckFee)
 
-	// refund timeout fee for unused timeout
-	k.distributeFee(ctx, refundAddr, refundAddr, packetFee.Fee.TimeoutFee)
+	// refund unused amount from the escrowed fee
+	refundCoins := packetFee.Fee.Total().Sub(packetFee.Fee.RecvFee...).Sub(packetFee.Fee.AckFee...)
+	k.distributeFee(ctx, refundAddr, refundAddr, refundCoins)
 }
 
 // DistributePacketsFeesOnTimeout pays all the timeout fees for a given packetID while refunding the acknowledgement & receive fees to the refund account.
@@ -121,7 +123,7 @@ func (k Keeper) DistributePacketFeesOnTimeout(ctx sdk.Context, timeoutRelayer sd
 		// check if refundAcc address works
 		refundAddr, err := sdk.AccAddressFromBech32(packetFee.RefundAddress)
 		if err != nil {
-			panic(fmt.Sprintf("could not parse refundAcc %s to sdk.AccAddress", packetFee.RefundAddress))
+			panic(fmt.Errorf("could not parse refundAcc %s to sdk.AccAddress", packetFee.RefundAddress))
 		}
 
 		k.distributePacketFeeOnTimeout(cacheCtx, refundAddr, timeoutRelayer, packetFee)
@@ -136,14 +138,12 @@ func (k Keeper) DistributePacketFeesOnTimeout(ctx sdk.Context, timeoutRelayer sd
 
 // distributePacketFeeOnTimeout pays the timeout fee to the timeout relayer and refunds the acknowledgement & receive fee.
 func (k Keeper) distributePacketFeeOnTimeout(ctx sdk.Context, refundAddr, timeoutRelayer sdk.AccAddress, packetFee types.PacketFee) {
-	// refund receive fee for unused forward relaying
-	k.distributeFee(ctx, refundAddr, refundAddr, packetFee.Fee.RecvFee)
-
-	// refund ack fee for unused reverse relaying
-	k.distributeFee(ctx, refundAddr, refundAddr, packetFee.Fee.AckFee)
-
 	// distribute fee for timeout relaying
 	k.distributeFee(ctx, timeoutRelayer, refundAddr, packetFee.Fee.TimeoutFee)
+
+	// refund unused amount from the escrowed fee
+	refundCoins := packetFee.Fee.Total().Sub(packetFee.Fee.TimeoutFee...)
+	k.distributeFee(ctx, refundAddr, refundAddr, refundCoins)
 }
 
 // distributeFee will attempt to distribute the escrowed fee to the receiver address.
@@ -167,6 +167,10 @@ func (k Keeper) distributeFee(ctx sdk.Context, receiver, refundAccAddress sdk.Ac
 			k.Logger(ctx).Error("error refunding fee to the original sender", "refund address", refundAccAddress, "fee", fee)
 			return // if sending to the refund address fails, no-op
 		}
+
+		emitDistributeFeeEvent(ctx, refundAccAddress.String(), fee)
+	} else {
+		emitDistributeFeeEvent(ctx, receiver.String(), fee)
 	}
 
 	// write the cache
@@ -185,7 +189,7 @@ func (k Keeper) RefundFeesOnChannelClosure(ctx sdk.Context, portID, channelID st
 	cacheCtx, writeFn := ctx.CacheContext()
 
 	for _, identifiedPacketFee := range identifiedPacketFees {
-		var failedToSendCoins bool
+		var unRefundedFees []types.PacketFee
 		for _, packetFee := range identifiedPacketFee.PacketFees {
 
 			if !k.EscrowAccountHasBalance(cacheCtx, packetFee.Fee.Total()) {
@@ -203,18 +207,22 @@ func (k Keeper) RefundFeesOnChannelClosure(ctx sdk.Context, portID, channelID st
 
 			refundAddr, err := sdk.AccAddressFromBech32(packetFee.RefundAddress)
 			if err != nil {
-				failedToSendCoins = true
+				unRefundedFees = append(unRefundedFees, packetFee)
 				continue
 			}
 
 			// refund all fees to refund address
 			if err = k.bankKeeper.SendCoinsFromModuleToAccount(cacheCtx, types.ModuleName, refundAddr, packetFee.Fee.Total()); err != nil {
-				failedToSendCoins = true
+				unRefundedFees = append(unRefundedFees, packetFee)
 				continue
 			}
 		}
 
-		if !failedToSendCoins {
+		if len(unRefundedFees) > 0 {
+			// update packet fees to keep only the unrefunded fees
+			packetFees := types.NewPacketFees(unRefundedFees)
+			k.SetFeesInEscrow(cacheCtx, identifiedPacketFee.PacketId, packetFees)
+		} else {
 			k.DeleteFeesInEscrow(cacheCtx, identifiedPacketFee.PacketId)
 		}
 	}
