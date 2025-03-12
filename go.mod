@@ -8,6 +8,9 @@ retract (
 	[v6.0.0, v6.0.1] // depends on SDK version < v0.46.7
 )
 
+// contains ASA-2025-004 and ISA-2025-001 vulnerabilities
+// retract [v7.0.0, v7.9.2]
+
 require (
 	cosmossdk.io/math v1.0.0-rc.0
 	github.com/armon/go-metrics v0.4.1
