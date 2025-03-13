@@ -1,4 +1,4 @@
-FROM golang:1.19 as builder
+FROM golang:1.23 AS builder
 
 ARG IBC_GO_VERSION
 

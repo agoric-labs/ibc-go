@@ -56,3 +56,5 @@ dependency-graph.png
 
 *.history
 
+go.work
+go.work.sum
