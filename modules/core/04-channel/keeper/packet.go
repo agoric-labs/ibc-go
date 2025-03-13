@@ -9,11 +9,11 @@ import (
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
 
-	clienttypes "github.com/cosmos/ibc-go/v6/modules/core/02-client/types"
-	connectiontypes "github.com/cosmos/ibc-go/v6/modules/core/03-connection/types"
-	"github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
-	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
-	"github.com/cosmos/ibc-go/v6/modules/core/exported"
+	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
+	connectiontypes "github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
+	"github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
+	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
+	"github.com/cosmos/ibc-go/v7/modules/core/exported"
 )
 
 // SendPacket is called by a module in order to send an IBC packet on a channel.
@@ -33,10 +33,10 @@ func (k Keeper) SendPacket(
 		return 0, sdkerrors.Wrap(types.ErrChannelNotFound, sourceChannel)
 	}
 
-	if channel.State == types.CLOSED {
+	if channel.State != types.OPEN {
 		return 0, sdkerrors.Wrapf(
 			types.ErrInvalidChannelState,
-			"channel is CLOSED (got %s)", channel.State.String(),
+			"channel is not OPEN (got %s)", channel.State.String(),
 		)
 	}
 
@@ -67,12 +67,11 @@ func (k Keeper) SendPacket(
 
 	clientState, found := k.clientKeeper.GetClientState(ctx, connectionEnd.GetClientID())
 	if !found {
-		return 0, clienttypes.ErrConsensusStateNotFound
+		return 0, clienttypes.ErrClientNotFound
 	}
 
 	// prevent accidental sends with clients that cannot be updated
-	clientStore := k.clientKeeper.ClientStore(ctx, connectionEnd.GetClientID())
-	if status := clientState.Status(ctx, clientStore, k.cdc); status != exported.Active {
+	if status := k.clientKeeper.GetClientStatus(ctx, clientState, connectionEnd.GetClientID()); status != exported.Active {
 		return 0, sdkerrors.Wrapf(clienttypes.ErrClientNotActive, "cannot send packet using client (%s) with status %s", connectionEnd.GetClientID(), status)
 	}
 
@@ -85,25 +84,16 @@ func (k Keeper) SendPacket(
 		)
 	}
 
-	clientType, _, err := clienttypes.ParseClientIdentifier(connectionEnd.GetClientID())
+	latestTimestamp, err := k.connectionKeeper.GetTimestampAtHeight(ctx, connectionEnd, latestHeight)
 	if err != nil {
 		return 0, err
 	}
 
-	// NOTE: this is a temporary fix. Solo machine does not support usage of 'GetTimestampAtHeight'
-	// A future change should move this function to be a ClientState callback.
-	if clientType != exported.Solomachine {
-		latestTimestamp, err := k.connectionKeeper.GetTimestampAtHeight(ctx, connectionEnd, latestHeight)
-		if err != nil {
-			return 0, err
-		}
-
-		if packet.GetTimeoutTimestamp() != 0 && latestTimestamp >= packet.GetTimeoutTimestamp() {
-			return 0, sdkerrors.Wrapf(
-				types.ErrPacketTimeout,
-				"receiving chain block timestamp >= packet timeout timestamp (%s >= %s)", time.Unix(0, int64(latestTimestamp)), time.Unix(0, int64(packet.GetTimeoutTimestamp())),
-			)
-		}
+	if packet.GetTimeoutTimestamp() != 0 && latestTimestamp >= packet.GetTimeoutTimestamp() {
+		return 0, sdkerrors.Wrapf(
+			types.ErrPacketTimeout,
+			"receiving chain block timestamp >= packet timeout timestamp (%s >= %s)", time.Unix(0, int64(latestTimestamp)).UTC(), time.Unix(0, int64(packet.GetTimeoutTimestamp())).UTC(),
+		)
 	}
 
 	commitment := types.CommitPacket(k.cdc, packet)
@@ -199,7 +189,7 @@ func (k Keeper) RecvPacket(
 	if packet.GetTimeoutTimestamp() != 0 && uint64(ctx.BlockTime().UnixNano()) >= packet.GetTimeoutTimestamp() {
 		return sdkerrors.Wrapf(
 			types.ErrPacketTimeout,
-			"block timestamp >= packet timeout timestamp (%s >= %s)", ctx.BlockTime(), time.Unix(0, int64(packet.GetTimeoutTimestamp())),
+			"block timestamp >= packet timeout timestamp (%s >= %s)", ctx.BlockTime(), time.Unix(0, int64(packet.GetTimeoutTimestamp())).UTC(),
 		)
 	}
 
@@ -214,6 +204,29 @@ func (k Keeper) RecvPacket(
 		return sdkerrors.Wrap(err, "couldn't verify counterparty packet commitment")
 	}
 
+	if err := k.applyReplayProtection(ctx, packet, channel); err != nil {
+		return err
+	}
+
+	// log that a packet has been received & executed
+	k.Logger(ctx).Info(
+		"packet received",
+		"sequence", strconv.FormatUint(packet.GetSequence(), 10),
+		"src_port", packet.GetSourcePort(),
+		"src_channel", packet.GetSourceChannel(),
+		"dst_port", packet.GetDestPort(),
+		"dst_channel", packet.GetDestChannel(),
+	)
+
+	// emit an event that the relayer can query for
+	EmitRecvPacketEvent(ctx, packet, channel)
+
+	return nil
+}
+
+// applyReplayProtection ensures a packet has not already been received
+// and performs the necessary state changes to ensure it cannot be received again.
+func (k *Keeper) applyReplayProtection(ctx sdk.Context, packet exported.PacketI, channel types.Channel) error {
 	switch channel.Ordering {
 	case types.UNORDERED:
 		// check if the packet receipt has been received already for unordered channels
@@ -266,19 +279,6 @@ func (k Keeper) RecvPacket(
 		k.SetNextSequenceRecv(ctx, packet.GetDestPort(), packet.GetDestChannel(), nextSequenceRecv)
 
 	}
-
-	// log that a packet has been received & executed
-	k.Logger(ctx).Info(
-		"packet received",
-		"sequence", strconv.FormatUint(packet.GetSequence(), 10),
-		"src_port", packet.GetSourcePort(),
-		"src_channel", packet.GetSourceChannel(),
-		"dst_port", packet.GetDestPort(),
-		"dst_channel", packet.GetDestChannel(),
-	)
-
-	// emit an event that the relayer can query for
-	EmitRecvPacketEvent(ctx, packet, channel)
 
 	return nil
 }
@@ -435,6 +435,15 @@ func (k Keeper) AcknowledgePacket(
 	}
 
 	packetCommitment := types.CommitPacket(k.cdc, packet)
+
+	var ack types.Acknowledgement
+	err := types.SubModuleCdc.UnmarshalJSON(acknowledgement, &ack)
+	if err == nil {
+		ackBz := ack.Acknowledgement()
+		if !bytes.Equal(ackBz, acknowledgement) {
+			return sdkerrors.Wrap(types.ErrInvalidAcknowledgement, "acknowledgement marshalling error")
+		}
+	}
 
 	// verify we sent the packet and haven't cleared it out yet
 	if !bytes.Equal(commitment, packetCommitment) {

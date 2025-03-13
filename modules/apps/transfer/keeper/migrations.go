@@ -5,7 +5,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
+	"github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
 )
 
 // Migrator is a struct for handling in-place store migrations.
@@ -50,6 +50,28 @@ func (m Migrator) MigrateTraces(ctx sdk.Context) error {
 	for _, nt := range newTraces {
 		m.keeper.SetDenomTrace(ctx, nt)
 	}
+	return nil
+}
+
+// MigrateTotalEscrowForDenom migrates the total amount of source chain tokens in escrow.
+func (m Migrator) MigrateTotalEscrowForDenom(ctx sdk.Context) error {
+	var totalEscrowed sdk.Coins
+	portID := m.keeper.GetPort(ctx)
+
+	transferChannels := m.keeper.channelKeeper.GetAllChannelsWithPortPrefix(ctx, portID)
+	for _, channel := range transferChannels {
+		escrowAddress := types.GetEscrowAddress(portID, channel.ChannelId)
+		escrowBalances := m.keeper.bankKeeper.GetAllBalances(ctx, escrowAddress)
+
+		totalEscrowed = totalEscrowed.Add(escrowBalances...)
+	}
+
+	for _, totalEscrow := range totalEscrowed {
+		m.keeper.SetTotalEscrowForDenom(ctx, totalEscrow)
+	}
+
+	logger := m.keeper.Logger(ctx)
+	logger.Info("successfully set total escrow for %d denominations", totalEscrowed.Len())
 	return nil
 }
 

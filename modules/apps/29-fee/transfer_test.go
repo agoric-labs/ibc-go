@@ -3,10 +3,10 @@ package fee_test
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/cosmos/ibc-go/v6/modules/apps/29-fee/types"
-	transfertypes "github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
-	clienttypes "github.com/cosmos/ibc-go/v6/modules/core/02-client/types"
-	ibctesting "github.com/cosmos/ibc-go/v6/testing"
+	"github.com/cosmos/ibc-go/v7/modules/apps/29-fee/types"
+	transfertypes "github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
+	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
+	ibctesting "github.com/cosmos/ibc-go/v7/testing"
 )
 
 // Integration test to ensure ics29 works with ics20
@@ -67,4 +67,20 @@ func (suite *FeeTestSuite) TestFeeTransfer() {
 	suite.Require().Equal(
 		fee.AckFee.Add(fee.TimeoutFee...), // ack fee paid, timeout fee refunded
 		sdk.NewCoins(suite.chainA.GetSimApp().BankKeeper.GetBalance(suite.chainA.GetContext(), suite.chainA.SenderAccount.GetAddress(), ibctesting.TestCoin.Denom)).Sub(originalChainASenderAccountBalance[0]))
+}
+
+func (suite *FeeTestSuite) TestOnesidedFeeMiddlewareTransferHandshake() {
+	RemoveFeeMiddleware(suite.chainB) // remove fee middleware from chainB
+
+	path := ibctesting.NewPath(suite.chainA, suite.chainB)
+	feeTransferVersion := string(types.ModuleCdc.MustMarshalJSON(&types.Metadata{FeeVersion: types.Version, AppVersion: transfertypes.Version}))
+	path.EndpointA.ChannelConfig.Version = feeTransferVersion // this will be renegotiated by the Try step
+	path.EndpointB.ChannelConfig.Version = ""                 // this will be overwritten by the Try step
+	path.EndpointA.ChannelConfig.PortID = transfertypes.PortID
+	path.EndpointB.ChannelConfig.PortID = transfertypes.PortID
+
+	suite.coordinator.Setup(path)
+
+	suite.Require().Equal(path.EndpointA.ChannelConfig.Version, transfertypes.Version)
+	suite.Require().Equal(path.EndpointB.ChannelConfig.Version, transfertypes.Version)
 }

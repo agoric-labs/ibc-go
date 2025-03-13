@@ -6,8 +6,10 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/cosmos/ibc-go/v6/modules/core/03-connection/types"
-	ibctesting "github.com/cosmos/ibc-go/v6/testing"
+	"github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
+	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
+	"github.com/cosmos/ibc-go/v7/modules/core/exported"
+	ibctesting "github.com/cosmos/ibc-go/v7/testing"
 )
 
 type KeeperTestSuite struct {
@@ -59,7 +61,7 @@ func (suite *KeeperTestSuite) TestSetAndGetClientConnectionPaths() {
 }
 
 // create 2 connections: A0 - B0, A1 - B1
-func (suite KeeperTestSuite) TestGetAllConnections() {
+func (suite KeeperTestSuite) TestGetAllConnections() { //nolint:govet // this is a test, we are okay with copying locks
 	path1 := ibctesting.NewPath(suite.chainA, suite.chainB)
 	suite.coordinator.SetupConnections(path1)
 
@@ -78,7 +80,11 @@ func (suite KeeperTestSuite) TestGetAllConnections() {
 	iconn1 := types.NewIdentifiedConnection(path1.EndpointA.ConnectionID, conn1)
 	iconn2 := types.NewIdentifiedConnection(path2.EndpointA.ConnectionID, conn2)
 
-	expConnections := []types.IdentifiedConnection{iconn1, iconn2}
+	suite.chainA.App.GetIBCKeeper().ConnectionKeeper.CreateSentinelLocalhostConnection(suite.chainA.GetContext())
+	localhostConn, found := suite.chainA.App.GetIBCKeeper().ConnectionKeeper.GetConnection(suite.chainA.GetContext(), exported.LocalhostConnectionID)
+	suite.Require().True(found)
+
+	expConnections := []types.IdentifiedConnection{iconn1, iconn2, types.NewIdentifiedConnection(exported.LocalhostConnectionID, localhostConn)}
 
 	connections := suite.chainA.App.GetIBCKeeper().ConnectionKeeper.GetAllConnections(suite.chainA.GetContext())
 	suite.Require().Len(connections, len(expConnections))
@@ -87,7 +93,7 @@ func (suite KeeperTestSuite) TestGetAllConnections() {
 
 // the test creates 2 clients path.EndpointA.ClientID0 and path.EndpointA.ClientID1. path.EndpointA.ClientID0 has a single
 // connection and path.EndpointA.ClientID1 has 2 connections.
-func (suite KeeperTestSuite) TestGetAllClientConnectionPaths() {
+func (suite KeeperTestSuite) TestGetAllClientConnectionPaths() { //nolint:govet // this is a test, we are okay with copying locks
 	path1 := ibctesting.NewPath(suite.chainA, suite.chainB)
 	path2 := ibctesting.NewPath(suite.chainA, suite.chainB)
 	suite.coordinator.SetupConnections(path1)
@@ -111,7 +117,10 @@ func (suite KeeperTestSuite) TestGetAllClientConnectionPaths() {
 // TestGetTimestampAtHeight verifies if the clients on each chain return the
 // correct timestamp for the other chain.
 func (suite *KeeperTestSuite) TestGetTimestampAtHeight() {
-	var connection types.ConnectionEnd
+	var (
+		connection types.ConnectionEnd
+		height     exported.Height
+	)
 
 	cases := []struct {
 		msg      string
@@ -122,10 +131,14 @@ func (suite *KeeperTestSuite) TestGetTimestampAtHeight() {
 			path := ibctesting.NewPath(suite.chainA, suite.chainB)
 			suite.coordinator.SetupConnections(path)
 			connection = path.EndpointA.GetConnection()
+			height = suite.chainB.LastHeader.GetHeight()
 		}, true},
+		{"client state not found", func() {}, false},
 		{"consensus state not found", func() {
-			// any non-nil value of connection is valid
-			suite.Require().NotNil(connection)
+			path := ibctesting.NewPath(suite.chainA, suite.chainB)
+			suite.coordinator.SetupConnections(path)
+			connection = path.EndpointA.GetConnection()
+			height = suite.chainB.LastHeader.GetHeight().Increment()
 		}, false},
 	}
 
@@ -136,7 +149,7 @@ func (suite *KeeperTestSuite) TestGetTimestampAtHeight() {
 			tc.malleate()
 
 			actualTimestamp, err := suite.chainA.App.GetIBCKeeper().ConnectionKeeper.GetTimestampAtHeight(
-				suite.chainA.GetContext(), connection, suite.chainB.LastHeader.GetHeight(),
+				suite.chainA.GetContext(), connection, height,
 			)
 
 			if tc.expPass {
@@ -147,4 +160,19 @@ func (suite *KeeperTestSuite) TestGetTimestampAtHeight() {
 			}
 		})
 	}
+}
+
+func (suite *KeeperTestSuite) TestLocalhostConnectionEndCreation() {
+	ctx := suite.chainA.GetContext()
+	connectionKeeper := suite.chainA.App.GetIBCKeeper().ConnectionKeeper
+	connectionKeeper.CreateSentinelLocalhostConnection(ctx)
+
+	connectionEnd, found := connectionKeeper.GetConnection(ctx, exported.LocalhostConnectionID)
+
+	suite.Require().True(found)
+	suite.Require().Equal(types.OPEN, connectionEnd.State)
+	suite.Require().Equal(exported.LocalhostClientID, connectionEnd.ClientId)
+	suite.Require().Equal(types.ExportedVersionsToProto(types.GetCompatibleVersions()), connectionEnd.Versions)
+	expectedCounterParty := types.NewCounterparty(exported.LocalhostClientID, exported.LocalhostConnectionID, commitmenttypes.NewMerklePrefix(connectionKeeper.GetCommitmentPrefix().Bytes()))
+	suite.Require().Equal(expectedCounterParty, connectionEnd.Counterparty)
 }

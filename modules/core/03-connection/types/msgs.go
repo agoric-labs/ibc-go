@@ -5,10 +5,10 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
-	clienttypes "github.com/cosmos/ibc-go/v6/modules/core/02-client/types"
-	commitmenttypes "github.com/cosmos/ibc-go/v6/modules/core/23-commitment/types"
-	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
-	"github.com/cosmos/ibc-go/v6/modules/core/exported"
+	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
+	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
+	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
+	"github.com/cosmos/ibc-go/v7/modules/core/exported"
 )
 
 var (
@@ -43,6 +43,10 @@ func NewMsgConnectionOpenInit(
 
 // ValidateBasic implements sdk.Msg.
 func (msg MsgConnectionOpenInit) ValidateBasic() error {
+	if msg.ClientId == exported.LocalhostClientID {
+		return sdkerrors.Wrap(clienttypes.ErrInvalidClientType, "localhost connection handshakes are disallowed")
+	}
+
 	if err := host.ClientIdentifierValidator(msg.ClientId); err != nil {
 		return sdkerrors.Wrap(err, "invalid client ID")
 	}
@@ -102,6 +106,10 @@ func NewMsgConnectionOpenTry(
 
 // ValidateBasic implements sdk.Msg
 func (msg MsgConnectionOpenTry) ValidateBasic() error {
+	if msg.ClientId == exported.LocalhostClientID {
+		return sdkerrors.Wrap(clienttypes.ErrInvalidClientType, "localhost connection handshakes are disallowed")
+	}
+
 	if msg.PreviousConnectionId != "" {
 		return sdkerrors.Wrap(ErrInvalidConnectionIdentifier, "previous connection identifier must be empty, this field has been deprecated as crossing hellos are no longer supported")
 	}
@@ -111,16 +119,6 @@ func (msg MsgConnectionOpenTry) ValidateBasic() error {
 	// counterparty validate basic allows empty counterparty connection identifiers
 	if err := host.ConnectionIdentifierValidator(msg.Counterparty.ConnectionId); err != nil {
 		return sdkerrors.Wrap(err, "invalid counterparty connection ID")
-	}
-	if msg.ClientState == nil {
-		return sdkerrors.Wrap(clienttypes.ErrInvalidClient, "counterparty client is nil")
-	}
-	clientState, err := clienttypes.UnpackClientState(msg.ClientState)
-	if err != nil {
-		return sdkerrors.Wrapf(clienttypes.ErrInvalidClient, "unpack err: %v", err)
-	}
-	if err := clientState.Validate(); err != nil {
-		return sdkerrors.Wrap(err, "counterparty client is invalid")
 	}
 	if len(msg.CounterpartyVersions) == 0 {
 		return sdkerrors.Wrap(sdkerrors.ErrInvalidVersion, "empty counterparty versions")
@@ -133,19 +131,7 @@ func (msg MsgConnectionOpenTry) ValidateBasic() error {
 	if len(msg.ProofInit) == 0 {
 		return sdkerrors.Wrap(commitmenttypes.ErrInvalidProof, "cannot submit an empty proof init")
 	}
-	if len(msg.ProofClient) == 0 {
-		return sdkerrors.Wrap(commitmenttypes.ErrInvalidProof, "cannot submit empty proof client")
-	}
-	if len(msg.ProofConsensus) == 0 {
-		return sdkerrors.Wrap(commitmenttypes.ErrInvalidProof, "cannot submit an empty proof of consensus state")
-	}
-	if msg.ProofHeight.IsZero() {
-		return sdkerrors.Wrap(sdkerrors.ErrInvalidHeight, "proof height must be non-zero")
-	}
-	if msg.ConsensusHeight.IsZero() {
-		return sdkerrors.Wrap(sdkerrors.ErrInvalidHeight, "consensus height must be non-zero")
-	}
-	_, err = sdk.AccAddressFromBech32(msg.Signer)
+	_, err := sdk.AccAddressFromBech32(msg.Signer)
 	if err != nil {
 		return sdkerrors.Wrapf(sdkerrors.ErrInvalidAddress, "string could not be parsed as address: %v", err)
 	}
@@ -207,32 +193,10 @@ func (msg MsgConnectionOpenAck) ValidateBasic() error {
 	if err := ValidateVersion(msg.Version); err != nil {
 		return err
 	}
-	if msg.ClientState == nil {
-		return sdkerrors.Wrap(clienttypes.ErrInvalidClient, "counterparty client is nil")
-	}
-	clientState, err := clienttypes.UnpackClientState(msg.ClientState)
-	if err != nil {
-		return sdkerrors.Wrapf(clienttypes.ErrInvalidClient, "unpack err: %v", err)
-	}
-	if err := clientState.Validate(); err != nil {
-		return sdkerrors.Wrap(err, "counterparty client is invalid")
-	}
 	if len(msg.ProofTry) == 0 {
 		return sdkerrors.Wrap(commitmenttypes.ErrInvalidProof, "cannot submit an empty proof try")
 	}
-	if len(msg.ProofClient) == 0 {
-		return sdkerrors.Wrap(commitmenttypes.ErrInvalidProof, "cannot submit empty proof client")
-	}
-	if len(msg.ProofConsensus) == 0 {
-		return sdkerrors.Wrap(commitmenttypes.ErrInvalidProof, "cannot submit an empty proof of consensus state")
-	}
-	if msg.ProofHeight.IsZero() {
-		return sdkerrors.Wrap(sdkerrors.ErrInvalidHeight, "proof height must be non-zero")
-	}
-	if msg.ConsensusHeight.IsZero() {
-		return sdkerrors.Wrap(sdkerrors.ErrInvalidHeight, "consensus height must be non-zero")
-	}
-	_, err = sdk.AccAddressFromBech32(msg.Signer)
+	_, err := sdk.AccAddressFromBech32(msg.Signer)
 	if err != nil {
 		return sdkerrors.Wrapf(sdkerrors.ErrInvalidAddress, "string could not be parsed as address: %v", err)
 	}
@@ -270,9 +234,6 @@ func (msg MsgConnectionOpenConfirm) ValidateBasic() error {
 	}
 	if len(msg.ProofAck) == 0 {
 		return sdkerrors.Wrap(commitmenttypes.ErrInvalidProof, "cannot submit an empty proof ack")
-	}
-	if msg.ProofHeight.IsZero() {
-		return sdkerrors.Wrap(sdkerrors.ErrInvalidHeight, "proof height must be non-zero")
 	}
 	_, err := sdk.AccAddressFromBech32(msg.Signer)
 	if err != nil {

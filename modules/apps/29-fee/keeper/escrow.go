@@ -7,8 +7,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
-	"github.com/cosmos/ibc-go/v6/modules/apps/29-fee/types"
-	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
+	"github.com/cosmos/ibc-go/v7/modules/apps/29-fee/types"
+	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
 )
 
 // escrowPacketFee sends the packet fee to the 29-fee module account to hold in escrow
@@ -167,6 +167,10 @@ func (k Keeper) distributeFee(ctx sdk.Context, receiver, refundAccAddress sdk.Ac
 			k.Logger(ctx).Error("error refunding fee to the original sender", "refund address", refundAccAddress, "fee", fee)
 			return // if sending to the refund address fails, no-op
 		}
+
+		EmitDistributeFeeEvent(ctx, refundAccAddress.String(), fee)
+	} else {
+		EmitDistributeFeeEvent(ctx, receiver.String(), fee)
 	}
 
 	// write the cache
@@ -185,7 +189,7 @@ func (k Keeper) RefundFeesOnChannelClosure(ctx sdk.Context, portID, channelID st
 	cacheCtx, writeFn := ctx.CacheContext()
 
 	for _, identifiedPacketFee := range identifiedPacketFees {
-		var failedToSendCoins bool
+		var unRefundedFees []types.PacketFee
 		for _, packetFee := range identifiedPacketFee.PacketFees {
 
 			if !k.EscrowAccountHasBalance(cacheCtx, packetFee.Fee.Total()) {
@@ -203,18 +207,22 @@ func (k Keeper) RefundFeesOnChannelClosure(ctx sdk.Context, portID, channelID st
 
 			refundAddr, err := sdk.AccAddressFromBech32(packetFee.RefundAddress)
 			if err != nil {
-				failedToSendCoins = true
+				unRefundedFees = append(unRefundedFees, packetFee)
 				continue
 			}
 
 			// refund all fees to refund address
 			if err = k.bankKeeper.SendCoinsFromModuleToAccount(cacheCtx, types.ModuleName, refundAddr, packetFee.Fee.Total()); err != nil {
-				failedToSendCoins = true
+				unRefundedFees = append(unRefundedFees, packetFee)
 				continue
 			}
 		}
 
-		if !failedToSendCoins {
+		if len(unRefundedFees) > 0 {
+			// update packet fees to keep only the unrefunded fees
+			packetFees := types.NewPacketFees(unRefundedFees)
+			k.SetFeesInEscrow(cacheCtx, identifiedPacketFee.PacketId, packetFees)
+		} else {
 			k.DeleteFeesInEscrow(cacheCtx, identifiedPacketFee.PacketId)
 		}
 	}

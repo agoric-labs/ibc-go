@@ -1,5 +1,5 @@
 run:
-  tests: false
+  tests: true
   #   # timeout for analysis, e.g. 30s, 5m, default is 1m
   timeout: 5m
 
@@ -13,14 +13,12 @@ linters:
     - goconst
     - gocritic
     - gofumpt
-    - goimports
     - gosec
     - gosimple
     - govet
     - ineffassign
     - misspell
     - nakedret
-    - prealloc
     - staticcheck
     - stylecheck
     - revive
@@ -28,13 +26,9 @@ linters:
     - unconvert
     - unused
     - misspell
-    - nolintlint
 
 issues:
   exclude-rules:
-    - text: "is unused for linter"
-      linters:
-        - nolintlint
     - text: "SA1019:"
       linters:
         - staticcheck

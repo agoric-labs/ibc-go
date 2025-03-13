@@ -10,8 +10,8 @@ import (
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/cosmos/ibc-go/v6/modules/apps/27-interchain-accounts/types"
-	ibctesting "github.com/cosmos/ibc-go/v6/testing"
+	"github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/types"
+	ibctesting "github.com/cosmos/ibc-go/v7/testing"
 )
 
 var (
@@ -78,7 +78,7 @@ func (suite *TypesTestSuite) TestValidateAccountAddress() {
 		},
 		{
 			"address is too long",
-			ibctesting.LongString,
+			ibctesting.GenerateString(uint(types.DefaultMaxAddrLength) + 1),
 			false,
 		},
 	}

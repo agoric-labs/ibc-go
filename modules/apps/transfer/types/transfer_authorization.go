@@ -1,22 +1,17 @@
 package types
 
 import (
-	"math/big"
-
-	sdkmath "cosmossdk.io/math"
+	"strings"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/x/authz"
 
-	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
-	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
+	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
+	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
 )
 
 var _ authz.Authorization = &TransferAuthorization{}
-
-// maxUint256 is the maximum value for a 256 bit unsigned integer.
-var maxUint256 = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
 
 // NewTransferAuthorization creates a new TransferAuthorization object.
 func NewTransferAuthorization(allocations ...Allocation) *TransferAuthorization {
@@ -44,6 +39,11 @@ func (a TransferAuthorization) Accept(ctx sdk.Context, msg sdk.Msg) (authz.Accep
 
 		if !isAllowedAddress(ctx, msgTransfer.Receiver, allocation.AllowList) {
 			return authz.AcceptResponse{}, sdkerrors.Wrap(sdkerrors.ErrInvalidAddress, "not allowed receiver address for transfer")
+		}
+
+		err := validateMemo(sdk.UnwrapSDKContext(ctx), msgTransfer.Memo, allocation.AllowedPacketData)
+		if err != nil {
+			return authz.AcceptResponse{}, err
 		}
 
 		// If the spend limit is set to the MaxUint256 sentinel value, do not subtract the amount from the spend limit.
@@ -141,11 +141,31 @@ func isAllowedAddress(ctx sdk.Context, receiver string, allowedAddrs []string) b
 	return false
 }
 
-// UnboundedSpendLimit returns the sentinel value that can be used
-// as the amount for a denomination's spend limit for which spend limit updating
-// should be disabled. Please note that using this sentinel value means that a grantee
-// will be granted the privilege to do ICS20 token transfers for the total amount
-// of the denomination available at the granter's account.
-func UnboundedSpendLimit() sdkmath.Int {
-	return sdk.NewIntFromBigInt(maxUint256)
+// validateMemo returns a nil error indicating if the memo is valid for transfer.
+func validateMemo(ctx sdk.Context, memo string, allowedMemos []string) error {
+	// if the allow list is empty, then the memo must be an empty string
+	if len(allowedMemos) == 0 {
+		if len(strings.TrimSpace(memo)) != 0 {
+			return sdkerrors.Wrapf(ErrInvalidAuthorization, "memo must be empty because allowed packet data in allocation is empty")
+		}
+
+		return nil
+	}
+
+	// if allowedPacketDataList has only 1 element and it equals AllowAllPacketDataKeys
+	// then accept all the memo strings
+	if len(allowedMemos) == 1 && allowedMemos[0] == AllowAllPacketDataKeys {
+		return nil
+	}
+
+	gasCostPerIteration := ctx.KVGasConfig().IterNextCostFlat
+	for _, allowedMemo := range allowedMemos {
+		ctx.GasMeter().ConsumeGas(gasCostPerIteration, "transfer authorization")
+
+		if strings.TrimSpace(memo) == strings.TrimSpace(allowedMemo) {
+			return nil
+		}
+	}
+
+	return sdkerrors.Wrapf(ErrInvalidAuthorization, "not allowed memo: %s", memo)
 }
