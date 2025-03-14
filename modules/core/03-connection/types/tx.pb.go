@@ -630,6 +630,7 @@ func _Msg_ConnectionOpenConfirm_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+var Msg_serviceDesc = _Msg_serviceDesc
 var _Msg_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "ibc.core.connection.v1.Msg",
 	HandlerType: (*MsgServer)(nil),
