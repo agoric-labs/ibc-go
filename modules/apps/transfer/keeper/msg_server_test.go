@@ -3,8 +3,9 @@ package keeper_test
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	ibctesting "github.com/cosmos/ibc-go/v7/testing"
 
-	"github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
+	"github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
 )
 
 func (suite *KeeperTestSuite) TestMsgTransfer() {
@@ -23,11 +24,12 @@ func (suite *KeeperTestSuite) TestMsgTransfer() {
 		{
 			"bank send enabled for denom",
 			func() {
-				suite.chainA.GetSimApp().BankKeeper.SetParams(suite.chainA.GetContext(),
+				err := suite.chainA.GetSimApp().BankKeeper.SetParams(suite.chainA.GetContext(),
 					banktypes.Params{
 						SendEnabled: []*banktypes.SendEnabled{{Denom: sdk.DefaultBondDenom, Enabled: true}},
 					},
 				)
+				suite.Require().NoError(err)
 			},
 			true,
 		},
@@ -59,11 +61,12 @@ func (suite *KeeperTestSuite) TestMsgTransfer() {
 		{
 			"bank send disabled for denom",
 			func() {
-				suite.chainA.GetSimApp().BankKeeper.SetParams(suite.chainA.GetContext(),
+				err := suite.chainA.GetSimApp().BankKeeper.SetParams(suite.chainA.GetContext(),
 					banktypes.Params{
 						SendEnabled: []*banktypes.SendEnabled{{Denom: sdk.DefaultBondDenom, Enabled: false}},
 					},
 				)
+				suite.Require().NoError(err)
 			},
 			false,
 		},
@@ -94,15 +97,30 @@ func (suite *KeeperTestSuite) TestMsgTransfer() {
 
 			tc.malleate()
 
-			res, err := suite.chainA.GetSimApp().TransferKeeper.Transfer(sdk.WrapSDKContext(suite.chainA.GetContext()), msg)
+			ctx := suite.chainA.GetContext()
+			res, err := suite.chainA.GetSimApp().TransferKeeper.Transfer(sdk.WrapSDKContext(ctx), msg)
+
+			// Verify events
+			events := ctx.EventManager().Events()
+			expEvents := ibctesting.EventsMap{
+				"ibc_transfer": {
+					"sender":   suite.chainA.SenderAccount.GetAddress().String(),
+					"receiver": suite.chainB.SenderAccount.GetAddress().String(),
+					"amount":   coin.Amount.String(),
+					"denom":    coin.Denom,
+					"memo":     "memo",
+				},
+			}
 
 			if tc.expPass {
 				suite.Require().NoError(err)
 				suite.Require().NotNil(res)
 				suite.Require().NotEqual(res.Sequence, uint64(0))
+				ibctesting.AssertEvents(&suite.Suite, expEvents, events)
 			} else {
 				suite.Require().Error(err)
 				suite.Require().Nil(res)
+				suite.Require().Len(events, 0)
 			}
 		})
 	}

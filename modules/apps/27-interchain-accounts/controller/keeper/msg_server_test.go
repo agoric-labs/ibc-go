@@ -4,21 +4,21 @@ import (
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdktypes "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
-	"github.com/gogo/protobuf/proto"
+	"github.com/cosmos/gogoproto/proto"
 
-	"github.com/cosmos/ibc-go/v6/modules/apps/27-interchain-accounts/controller/keeper"
-	"github.com/cosmos/ibc-go/v6/modules/apps/27-interchain-accounts/controller/types"
-	icatypes "github.com/cosmos/ibc-go/v6/modules/apps/27-interchain-accounts/types"
-	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
-	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
-	ibctesting "github.com/cosmos/ibc-go/v6/testing"
+	"github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/controller/keeper"
+	"github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/controller/types"
+	icatypes "github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/types"
+	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
+	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
+	ibctesting "github.com/cosmos/ibc-go/v7/testing"
 )
 
 func (suite *KeeperTestSuite) TestRegisterInterchainAccount_MsgServer() {
 	var (
 		msg               *types.MsgRegisterInterchainAccount
+		expectedOrderding channeltypes.Order
 		expectedChannelID = "channel-0"
 	)
 
@@ -37,6 +37,14 @@ func (suite *KeeperTestSuite) TestRegisterInterchainAccount_MsgServer() {
 			false,
 			func() {
 				msg.ConnectionId = "connection-100"
+			},
+		},
+		{
+			"success: ordering falls back to UNORDERED if not specified",
+			true,
+			func() {
+				msg.Ordering = channeltypes.NONE
+				expectedOrderding = channeltypes.UNORDERED
 			},
 		},
 		{
@@ -67,31 +75,41 @@ func (suite *KeeperTestSuite) TestRegisterInterchainAccount_MsgServer() {
 	for _, tc := range testCases {
 		suite.SetupTest()
 
-		path := NewICAPath(suite.chainA, suite.chainB)
-		suite.coordinator.SetupConnections(path)
+		suite.Run(tc.name, func() {
+			expectedOrderding = channeltypes.ORDERED
 
-		msg = types.NewMsgRegisterInterchainAccount(ibctesting.FirstConnectionID, ibctesting.TestAccAddress, "")
+			suite.SetupTest()
 
-		tc.malleate()
+			path := NewICAPath(suite.chainA, suite.chainB)
+			suite.coordinator.SetupConnections(path)
 
-		ctx := suite.chainA.GetContext()
+			msg = types.NewMsgRegisterInterchainAccountWithOrdering(ibctesting.FirstConnectionID, ibctesting.TestAccAddress, "", channeltypes.ORDERED)
 
-		msgServer := keeper.NewMsgServerImpl(&suite.chainA.GetSimApp().ICAControllerKeeper)
-		res, err := msgServer.RegisterInterchainAccount(ctx, msg)
+			tc.malleate()
 
-		if tc.expPass {
-			suite.Require().NoError(err)
-			suite.Require().NotNil(res)
-			suite.Require().Equal(expectedChannelID, res.ChannelId)
+			ctx := suite.chainA.GetContext()
+			msgServer := keeper.NewMsgServerImpl(&suite.chainA.GetSimApp().ICAControllerKeeper)
+			res, err := msgServer.RegisterInterchainAccount(ctx, msg)
 
-			events := ctx.EventManager().Events()
-			suite.Require().Len(events, 2)
-			suite.Require().Equal(events[0].Type, channeltypes.EventTypeChannelOpenInit)
-			suite.Require().Equal(events[1].Type, sdktypes.EventTypeMessage)
-		} else {
-			suite.Require().Error(err)
-			suite.Require().Nil(res)
-		}
+			if tc.expPass {
+				suite.Require().NoError(err)
+				suite.Require().NotNil(res)
+				suite.Require().Equal(expectedChannelID, res.ChannelId)
+
+				events := ctx.EventManager().Events()
+				suite.Require().Len(events, 2)
+				suite.Require().Equal(events[0].Type, channeltypes.EventTypeChannelOpenInit)
+				suite.Require().Equal(events[1].Type, sdk.EventTypeMessage)
+
+				path.EndpointA.ChannelConfig.PortID = res.PortId
+				path.EndpointA.ChannelID = res.ChannelId
+				channel := path.EndpointA.GetChannel()
+				suite.Require().Equal(expectedOrderding, channel.Ordering)
+			} else {
+				suite.Require().Error(err)
+				suite.Require().Nil(res)
+			}
+		})
 	}
 }
 

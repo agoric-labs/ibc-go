@@ -4,32 +4,27 @@ import (
 	"errors"
 	"fmt"
 
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	sdkerrors "cosmossdk.io/errors"
 	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
 
-	clienttypes "github.com/cosmos/ibc-go/v6/modules/core/02-client/types"
-	connectiontypes "github.com/cosmos/ibc-go/v6/modules/core/03-connection/types"
-	"github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
-	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
-	"github.com/cosmos/ibc-go/v6/modules/core/exported"
-	ibctmtypes "github.com/cosmos/ibc-go/v6/modules/light-clients/07-tendermint/types"
-	ibctesting "github.com/cosmos/ibc-go/v6/testing"
-	ibcmock "github.com/cosmos/ibc-go/v6/testing/mock"
+	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
+	connectiontypes "github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
+	"github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
+	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
+	"github.com/cosmos/ibc-go/v7/modules/core/exported"
+	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
+	ibctesting "github.com/cosmos/ibc-go/v7/testing"
+	ibcmock "github.com/cosmos/ibc-go/v7/testing/mock"
 )
 
 var (
 	disabledTimeoutTimestamp = uint64(0)
 	disabledTimeoutHeight    = clienttypes.ZeroHeight()
-	defaultTimeoutHeight     = clienttypes.NewHeight(0, 100)
+	defaultTimeoutHeight     = clienttypes.NewHeight(1, 100)
 
 	// for when the testing package cannot be used
-	clientIDA  = "clientA"
-	clientIDB  = "clientB"
-	connIDA    = "connA"
-	connIDB    = "connB"
-	portID     = "portid"
-	channelIDA = "channelidA"
-	channelIDB = "channelidB"
+	connIDA = "connA"
+	connIDB = "connB"
 )
 
 // TestSendPacket tests SendPacket from chainA to chainB
@@ -100,11 +95,25 @@ func (suite *KeeperTestSuite) TestSendPacket() {
 			sourceChannel = ibctesting.InvalidID
 			channelCap = suite.chainA.GetChannelCapability(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID)
 		}, false},
-		{"channel closed", func() {
+		{"channel is in CLOSED state", func() {
 			suite.coordinator.Setup(path)
 			sourceChannel = path.EndpointA.ChannelID
 
-			err := path.EndpointA.SetChannelClosed()
+			err := path.EndpointA.SetChannelState(types.CLOSED)
+			suite.Require().NoError(err)
+		}, false},
+		{"channel is in INIT state", func() {
+			suite.coordinator.Setup(path)
+			sourceChannel = path.EndpointA.ChannelID
+
+			err := path.EndpointA.SetChannelState(types.INIT)
+			suite.Require().NoError(err)
+		}, false},
+		{"channel is in TRYOPEN stage", func() {
+			suite.coordinator.Setup(path)
+			sourceChannel = path.EndpointA.ChannelID
+
+			err := path.EndpointA.SetChannelState(types.TRYOPEN)
 			suite.Require().NoError(err)
 		}, false},
 		{"connection not found", func() {
@@ -135,7 +144,7 @@ func (suite *KeeperTestSuite) TestSendPacket() {
 
 			connection := path.EndpointA.GetConnection()
 			clientState := path.EndpointA.GetClientState()
-			cs, ok := clientState.(*ibctmtypes.ClientState)
+			cs, ok := clientState.(*ibctm.ClientState)
 			suite.Require().True(ok)
 
 			// freeze client
@@ -166,6 +175,26 @@ func (suite *KeeperTestSuite) TestSendPacket() {
 
 			timeoutHeight = disabledTimeoutHeight
 			timeoutTimestamp = timestamp
+			channelCap = suite.chainA.GetChannelCapability(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID)
+		}, false},
+		{"timeout timestamp passed with solomachine", func() {
+			suite.coordinator.Setup(path)
+			// swap client with solomachine
+			solomachine := ibctesting.NewSolomachine(suite.T(), suite.chainA.Codec, "solomachinesingle", "testing", 1)
+			path.EndpointA.ClientID = clienttypes.FormatClientIdentifier(exported.Solomachine, 10)
+			path.EndpointA.SetClientState(solomachine.ClientState())
+			connection := path.EndpointA.GetConnection()
+			connection.ClientId = path.EndpointA.ClientID
+			path.EndpointA.SetConnection(connection)
+
+			clientState := path.EndpointA.GetClientState()
+			timestamp, err := suite.chainA.App.GetIBCKeeper().ConnectionKeeper.GetTimestampAtHeight(suite.chainA.GetContext(), connection, clientState.GetLatestHeight())
+			suite.Require().NoError(err)
+
+			sourceChannel = path.EndpointA.ChannelID
+			timeoutHeight = disabledTimeoutHeight
+			timeoutTimestamp = timestamp
+
 			channelCap = suite.chainA.GetChannelCapability(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID)
 		}, false},
 		{"next sequence send not found", func() {
@@ -322,7 +351,7 @@ func (suite *KeeperTestSuite) TestRecvPacket() {
 			suite.coordinator.Setup(path)
 			packet = types.NewPacket(ibctesting.MockPacketData, 1, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, defaultTimeoutHeight, disabledTimeoutTimestamp)
 
-			err := path.EndpointB.SetChannelClosed()
+			err := path.EndpointB.SetChannelState(types.CLOSED)
 			suite.Require().NoError(err)
 			channelCap = suite.chainB.GetChannelCapability(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
 		}, false},
@@ -421,8 +450,10 @@ func (suite *KeeperTestSuite) TestRecvPacket() {
 
 			channelCap = suite.chainB.GetChannelCapability(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
 
-			path.EndpointA.UpdateClient()
-			path.EndpointB.UpdateClient()
+			err := path.EndpointA.UpdateClient()
+			suite.Require().NoError(err)
+			err = path.EndpointB.UpdateClient()
+			suite.Require().NoError(err)
 		}, false},
 		{"receipt already stored", func() {
 			expError = types.ErrNoOpMsg
@@ -518,7 +549,7 @@ func (suite *KeeperTestSuite) TestWriteAcknowledgement() {
 			packet = types.NewPacket(ibctesting.MockPacketData, 1, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, defaultTimeoutHeight, disabledTimeoutTimestamp)
 			ack = ibcmock.MockAcknowledgement
 
-			err := path.EndpointB.SetChannelClosed()
+			err := path.EndpointB.SetChannelState(types.CLOSED)
 			suite.Require().NoError(err)
 			channelCap = suite.chainB.GetChannelCapability(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
 		}, false},
@@ -690,7 +721,9 @@ func (suite *KeeperTestSuite) TestAcknowledgePacket() {
 				path.EndpointB.Chain.App.GetIBCKeeper().ChannelKeeper.SetPacketAcknowledgement(path.EndpointB.Chain.GetContext(), path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, sequence, types.CommitAcknowledgement(ack))
 
 				path.EndpointB.Chain.NextBlock()
-				path.EndpointA.UpdateClient()
+				if err := path.EndpointA.UpdateClient(); err != nil {
+					panic(err)
+				}
 			},
 			false,
 		},
@@ -712,7 +745,9 @@ func (suite *KeeperTestSuite) TestAcknowledgePacket() {
 				path.EndpointB.Chain.App.GetIBCKeeper().ChannelKeeper.SetPacketAcknowledgement(path.EndpointB.Chain.GetContext(), path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, sequence, types.CommitAcknowledgement(ack))
 
 				path.EndpointB.Chain.NextBlock()
-				path.EndpointA.UpdateClient()
+				if err := path.EndpointA.UpdateClient(); err != nil {
+					panic(err)
+				}
 			},
 			true,
 		},
@@ -729,7 +764,7 @@ func (suite *KeeperTestSuite) TestAcknowledgePacket() {
 			suite.coordinator.Setup(path)
 			packet = types.NewPacket(ibctesting.MockPacketData, 1, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, defaultTimeoutHeight, disabledTimeoutTimestamp)
 
-			err := path.EndpointA.SetChannelClosed()
+			err := path.EndpointA.SetChannelState(types.CLOSED)
 			suite.Require().NoError(err)
 			channelCap = suite.chainA.GetChannelCapability(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID)
 		}, false},
@@ -862,8 +897,10 @@ func (suite *KeeperTestSuite) TestAcknowledgePacket() {
 
 			suite.coordinator.CommitBlock(path.EndpointA.Chain, path.EndpointB.Chain)
 
-			path.EndpointA.UpdateClient()
-			path.EndpointB.UpdateClient()
+			err := path.EndpointA.UpdateClient()
+			suite.Require().NoError(err)
+			err = path.EndpointB.UpdateClient()
+			suite.Require().NoError(err)
 		}, false},
 		{"next ack sequence mismatch ORDERED", func() {
 			expError = types.ErrPacketSequenceOutOfOrder

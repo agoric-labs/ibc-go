@@ -11,7 +11,7 @@ This is visually explained in the following decision tree:
   <img src="releases-decision-tree.png?raw=true" alt="Releases decision tree" width="40%" />
 </p>
 
-When bumping the dependencies of [Cosmos SDK](https://github.com/cosmos/cosmos-sdk) and [Tendermint](https://github.com/tendermint/tendermint) we will only treat patch releases as non state-machine breaking.
+When bumping the dependencies of [Cosmos SDK](https://github.com/cosmos/cosmos-sdk) and [CometBFT](https://github.com/cometbft/cometbft) we will only treat patch releases as non state-machine breaking.
 
 ## <a name="backwards"></a> Backwards compatibility
 
@@ -19,7 +19,7 @@ When bumping the dependencies of [Cosmos SDK](https://github.com/cosmos/cosmos-s
 
 To summarize: **All our ibc-go releases allow chains to communicate successfully with any chain running any version of our code**. That is to say, we are still using IBC protocol specification v1.0. 
 
-We ensure all major releases are supported by relayers ([hermes](https://github.com/informalsystems/ibc-rs), [rly](https://github.com/cosmos/relayer) and [ts-relayer](https://github.com/confio/ts-relayer) at the moment) which can relay between the new major release and older releases. We have no plans of upgrading to an IBC protocol specification v2.0, as this would be very disruptive to the ecosystem.
+We ensure all major releases are supported by relayers ([hermes](https://github.com/informalsystems/ibc-rs), [rly](https://github.com/strangelove-ventures/relayer) and [ts-relayer](https://github.com/confio/ts-relayer) at the moment) which can relay between the new major release and older releases. We have no plans of upgrading to an IBC protocol specification v2.0, as this would be very disruptive to the ecosystem.
 
 ## Release cycle
 
@@ -65,16 +65,16 @@ Only the following major release series have a stable release status:
 
 |Release|End of Life Date|
 |-------|----------------|
-|`v1.3.x`|July 01, 2022|
-|`v1.4.x`|July 01, 2022|
-|`v1.5.x`|July 01, 2022|
-|`v2.1.x`|February 01, 2023|
-|`v2.2.x`|February 01, 2023|
-|`v2.3.x`|February 01, 2023|
-|`v3.0.x`|March 15, 2023|
-|`v3.1.x`|March 15, 2023|
+|`v2.4.x`|February 01, 2023|
+|`v2.5.x`|February 01, 2023|
+|`v3.3.x`|March 15, 2023|
+|`v3.4.x`|March 15, 2023|
+|`v4.1.x`|August 12, 2023|
+|`v4.2.x`|August 12, 2023|
+|`v5.2.x`|September 28, 2023|
+|`v6.1.x`|December 09, 2023|
 
-**Note**: The v1 major release series will reach end of life 6 months after merging this policy. v2 will reach end of life one year after merging this policy. 
+All missing minor release versions have been discontinued.
 
 ### What pull requests will be included in stable patch-releases?
 
@@ -103,14 +103,14 @@ Versions of Golang, Cosmos SDK and Tendermint used by ibc-go in the currently ac
 
 | Go | ibc-go | Cosmos SDK | Tendermint |
 |----|--------|------------|------------|
-| 1.15 | v2.1.0 | v0.44.6 | v0.34.14 |
-| 1.15 | v2.1.1 | v0.44.8 | v0.34.19 |
-| 1.15 | v2.2.0 | v0.45.1 | v0.34.14 |
-| 1.15 | v2.2.1 | v0.45.1 | v0.34.14 |
-| 1.17 | v2.3.0 | v0.45.4 | v0.34.19 |
-| 1.17 | v3.0.0 | v0.45.1 | v0.34.14 |
-| 1.17 | v3.0.1 | v0.45.4 | v0.34.19 |
-| 1.17 | v3.1.0 | v0.45.4 | v0.34.19 |
+| 1.18 | v2.4.2 | v0.45.10 | v0.34.22 |
+| 1.18 | v2.5.0 | v0.45.10 | v0.34.22 |
+| 1.18 | v3.3.1 | v0.45.10 | v0.34.22 |
+| 1.18 | v3.4.0 | v0.45.10 | v0.34.22 |
+| 1.18 | v4.1.1 | v0.45.10 | v0.34.22 |
+| 1.18 | v4.2.0 | v0.45.10 | v0.34.22 |
+| 1.18 | v5.2.0 | v0.46.7 | v0.34.24 |
+| 1.18 | v6.1.0 | v0.46.7 | v0.34.24 |
 
 ## Graphics
 

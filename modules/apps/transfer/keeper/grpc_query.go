@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
+	"github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
 )
 
 var _ types.QueryServer = Keeper{}
@@ -119,5 +119,24 @@ func (q Keeper) EscrowAddress(c context.Context, req *types.QueryEscrowAddressRe
 
 	return &types.QueryEscrowAddressResponse{
 		EscrowAddress: addr.String(),
+	}, nil
+}
+
+// TotalEscrowForDenom implements the TotalEscrowForDenom gRPC method.
+func (q Keeper) TotalEscrowForDenom(c context.Context, req *types.QueryTotalEscrowForDenomRequest) (*types.QueryTotalEscrowForDenomResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+
+	ctx := sdk.UnwrapSDKContext(c)
+
+	if err := sdk.ValidateDenom(req.Denom); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	amount := q.GetTotalEscrowForDenom(ctx, req.Denom)
+
+	return &types.QueryTotalEscrowForDenomResponse{
+		Amount: amount,
 	}, nil
 }

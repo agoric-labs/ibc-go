@@ -4,14 +4,14 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
-	"github.com/gogo/protobuf/proto"
+	"github.com/cosmos/gogoproto/proto"
 
-	icahosttypes "github.com/cosmos/ibc-go/v6/modules/apps/27-interchain-accounts/host/types"
-	icatypes "github.com/cosmos/ibc-go/v6/modules/apps/27-interchain-accounts/types"
-	"github.com/cosmos/ibc-go/v6/modules/apps/29-fee/types"
-	clienttypes "github.com/cosmos/ibc-go/v6/modules/core/02-client/types"
-	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
-	ibctesting "github.com/cosmos/ibc-go/v6/testing"
+	icahosttypes "github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/host/types"
+	icatypes "github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/types"
+	"github.com/cosmos/ibc-go/v7/modules/apps/29-fee/types"
+	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
+	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
+	ibctesting "github.com/cosmos/ibc-go/v7/testing"
 )
 
 var (
@@ -76,7 +76,7 @@ func RegisterInterchainAccount(endpoint *ibctesting.Endpoint, owner string) erro
 
 	channelSequence := endpoint.Chain.App.GetIBCKeeper().ChannelKeeper.GetNextChannelSequence(endpoint.Chain.GetContext())
 
-	if err := endpoint.Chain.GetSimApp().ICAControllerKeeper.RegisterInterchainAccount(endpoint.Chain.GetContext(), endpoint.ConnectionID, owner, endpoint.ChannelConfig.Version); err != nil {
+	if err := endpoint.Chain.GetSimApp().ICAControllerKeeper.RegisterInterchainAccountWithOrdering(endpoint.Chain.GetContext(), endpoint.ConnectionID, owner, endpoint.ChannelConfig.Version, channeltypes.ORDERED); err != nil {
 		return err
 	}
 
@@ -182,6 +182,32 @@ func (suite *FeeTestSuite) TestFeeInterchainAccounts() {
 	suite.Require().Equal(preEscrowBalance.SubAmount(defaultRecvFee.AmountOf(sdk.DefaultBondDenom)), postDistBalance)
 }
 
+func (suite *FeeTestSuite) TestOnesidedFeeMiddlewareICAHandshake() {
+	RemoveFeeMiddleware(suite.chainB) // remove fee middleware from chainB
+
+	path := NewIncentivizedICAPath(suite.chainA, suite.chainB)
+
+	suite.coordinator.SetupConnections(path)
+
+	err := SetupPath(path, defaultOwnerAddress)
+	suite.Require().NoError(err)
+
+	// assert the newly established channel is not fee enabled on chainB
+	interchainAccountAddr, found := suite.chainB.GetSimApp().ICAHostKeeper.GetInterchainAccountAddress(suite.chainB.GetContext(), ibctesting.FirstConnectionID, path.EndpointA.ChannelConfig.PortID)
+	suite.Require().True(found)
+
+	var expVersionMetadata icatypes.Metadata
+	err = icatypes.ModuleCdc.UnmarshalJSON([]byte(defaultICAVersion), &expVersionMetadata)
+	suite.Require().NoError(err)
+
+	expVersionMetadata.Address = interchainAccountAddr
+
+	expVersion := string(icatypes.ModuleCdc.MustMarshalJSON(&expVersionMetadata))
+
+	suite.Require().Equal(path.EndpointA.ChannelConfig.Version, expVersion)
+	suite.Require().Equal(path.EndpointB.ChannelConfig.Version, expVersion)
+}
+
 func buildInterchainAccountsPacket(path *ibctesting.Path, data []byte, seq uint64) channeltypes.Packet {
 	packet := channeltypes.NewPacket(
 		data,
@@ -190,7 +216,7 @@ func buildInterchainAccountsPacket(path *ibctesting.Path, data []byte, seq uint6
 		path.EndpointA.ChannelID,
 		path.EndpointB.ChannelConfig.PortID,
 		path.EndpointB.ChannelID,
-		clienttypes.NewHeight(0, 100),
+		clienttypes.NewHeight(1, 100),
 		0,
 	)
 

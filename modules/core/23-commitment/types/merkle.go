@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"net/url"
 
-	ics23 "github.com/confio/ics23/go"
+	tmcrypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
-	"github.com/gogo/protobuf/proto"
-	tmcrypto "github.com/tendermint/tendermint/proto/tendermint/crypto"
+	"github.com/cosmos/gogoproto/proto"
+	ics23 "github.com/cosmos/ics23/go"
 
-	"github.com/cosmos/ibc-go/v6/modules/core/exported"
+	"github.com/cosmos/ibc-go/v7/modules/core/exported"
 )
 
 // var representing the proofspecs for a SDK chain
@@ -79,6 +79,12 @@ func NewMerklePath(keyPath ...string) MerklePath {
 // This represents the path in the same way the tendermint KeyPath will
 // represent a key path. The backslashes partition the key path into
 // the respective stores they belong to.
+//
+// Deprecated: This function makes assumptions about the way a merkle path
+// in a multistore should be represented as a string that are not standardized.
+// The decision on how to represent the merkle path as a string will be deferred
+// to upstream users of the type.
+// This function will be removed in a next release.
 func (mp MerklePath) String() string {
 	pathStr := ""
 	for _, k := range mp.KeyPath {
@@ -91,6 +97,12 @@ func (mp MerklePath) String() string {
 // This function will unescape any backslash within a particular store key.
 // This makes the keypath more human-readable while removing information
 // about the exact partitions in the key path.
+//
+// Deprecated: This function makes assumptions about the way a merkle path
+// in a multistore should be represented as a string that are not standardized.
+// The decision on how to represent the merkle path as a string will be deferred
+// to upstream users of the type.
+// This function will be removed in a next release.
 func (mp MerklePath) Pretty() string {
 	path, err := url.PathUnescape(mp.String())
 	if err != nil {
@@ -100,16 +112,11 @@ func (mp MerklePath) Pretty() string {
 }
 
 // GetKey will return a byte representation of the key
-// after URL escaping the key element
 func (mp MerklePath) GetKey(i uint64) ([]byte, error) {
 	if i >= uint64(len(mp.KeyPath)) {
 		return nil, fmt.Errorf("index out of range. %d (index) >= %d (len)", i, len(mp.KeyPath))
 	}
-	key, err := url.PathUnescape(mp.KeyPath[i])
-	if err != nil {
-		return nil, err
-	}
-	return []byte(key), nil
+	return []byte(mp.KeyPath[i]), nil
 }
 
 // Empty returns true if the path is empty
@@ -129,6 +136,7 @@ func ApplyPrefix(prefix exported.Prefix, path MerklePath) (MerklePath, error) {
 var _ exported.Proof = (*MerkleProof)(nil)
 
 // VerifyMembership verifies the membership of a merkle proof against the given root, path, and value.
+// Note that the path is expected as []string{<store key of module>, <key corresponding to requested value>}.
 func (proof MerkleProof) VerifyMembership(specs []*ics23.ProofSpec, root exported.Root, path exported.Path, value []byte) error {
 	if err := proof.validateVerificationArgs(specs, root); err != nil {
 		return err

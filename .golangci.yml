@@ -1,26 +1,22 @@
 run:
-  tests: false
+  tests: true
   #   # timeout for analysis, e.g. 30s, 5m, default is 1m
   timeout: 5m
 
 linters:
   disable-all: true
   enable:
-    - depguard
     - dogsled
-    - exportloopref
     - errcheck
     - goconst
     - gocritic
     - gofumpt
-    - goimports
     - gosec
     - gosimple
     - govet
     - ineffassign
     - misspell
     - nakedret
-    - prealloc
     - staticcheck
     - stylecheck
     - revive
@@ -28,16 +24,15 @@ linters:
     - unconvert
     - unused
     - misspell
-    - nolintlint
 
 issues:
   exclude-rules:
-    - text: "is unused for linter"
-      linters:
-        - nolintlint
     - text: "SA1019:"
       linters:
         - staticcheck
+    - text: "G115: integer overflow"
+      linters:
+        - gosec
     - text: "Use of weak random number generator"
       linters:
         - gosec
@@ -49,17 +44,20 @@ issues:
     - text: "ST1016:"
       linters:
         - stylecheck
+    - text: "redefines-builtin-id:"
+      linters:
+        - revive
+    - text: "unused-parameter:"
+      linters:
+        - revive
   max-issues-per-linter: 10000
   max-same-issues: 10000
 
 linters-settings:
   dogsled:
     max-blank-identifiers: 3
-  maligned:
-    # print struct with more effective memory layout or not, false by default
-    suggest-new: true
   nolintlint:
     allow-unused: false
-    allow-leading-space: true
     require-explanation: false
     require-specific: false
+  

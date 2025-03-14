@@ -4,16 +4,18 @@ import (
 	"errors"
 	"math"
 
+	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
 
-	"github.com/cosmos/ibc-go/v6/modules/apps/transfer"
-	"github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
-	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
-	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
-	"github.com/cosmos/ibc-go/v6/modules/core/exported"
-	ibctesting "github.com/cosmos/ibc-go/v6/testing"
+	"github.com/cosmos/ibc-go/v7/modules/apps/transfer"
+	"github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
+	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
+	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
+	ibcerrors "github.com/cosmos/ibc-go/v7/modules/core/errors"
+	"github.com/cosmos/ibc-go/v7/modules/core/exported"
+	ibctesting "github.com/cosmos/ibc-go/v7/testing"
 )
 
 func (suite *TransferTestSuite) TestOnChanOpenInit() {
@@ -54,7 +56,7 @@ func (suite *TransferTestSuite) TestOnChanOpenInit() {
 		},
 		{
 			"invalid version", func() {
-				channel.Version = "version"
+				channel.Version = "version" //nolint:goconst
 			}, false,
 		},
 		{
@@ -123,29 +125,30 @@ func (suite *TransferTestSuite) TestOnChanOpenTry() {
 			"success", func() {}, true,
 		},
 		{
-			"max channels reached", func() {
+			"success: invalid counterparty version proposes new version", func() {
+				// transfer module will propose the default version
+				counterpartyVersion = "version"
+			}, true,
+		},
+		{
+			"failure: max channels reached", func() {
 				path.EndpointA.ChannelID = channeltypes.FormatChannelIdentifier(math.MaxUint32 + 1)
 			}, false,
 		},
 		{
-			"capability already claimed", func() {
+			"failure: capability already claimed", func() {
 				err := suite.chainA.GetSimApp().ScopedTransferKeeper.ClaimCapability(suite.chainA.GetContext(), chanCap, host.ChannelCapabilityPath(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID))
 				suite.Require().NoError(err)
 			}, false,
 		},
 		{
-			"invalid order - ORDERED", func() {
+			"failure: invalid order - ORDERED", func() {
 				channel.Ordering = channeltypes.ORDERED
 			}, false,
 		},
 		{
-			"invalid port ID", func() {
+			"failure: invalid port ID", func() {
 				path.EndpointA.ChannelConfig.PortID = ibctesting.MockPort
-			}, false,
-		},
-		{
-			"invalid counterparty version", func() {
-				counterpartyVersion = "version"
 			}, false,
 		},
 	}
@@ -263,7 +266,6 @@ func (suite *TransferTestSuite) TestOnRecvPacket() {
 			"failure: invalid packet data bytes",
 			func() {
 				packet.Data = []byte("invalid data")
-
 			},
 			channeltypes.NewErrorAcknowledgement(sdkerrors.ErrInvalidType),
 		},
@@ -329,11 +331,50 @@ func (suite *TransferTestSuite) TestOnAcknowledgePacket() {
 			false,
 		},
 		{
+			"success: refund coins",
+			func() {
+				ack = channeltypes.NewErrorAcknowledgement(ibcerrors.ErrInsufficientFunds).Acknowledgement()
+			},
+			nil,
+			true,
+		},
+		{
+			"cannot refund ack on non-existent channel",
+			func() {
+				ack = channeltypes.NewErrorAcknowledgement(ibcerrors.ErrInsufficientFunds).Acknowledgement()
+
+				packet.SourceChannel = "channel-100"
+			},
+			errors.New("unable to unescrow tokens"),
+			false,
+		},
+		{
 			"invalid packet data",
 			func() {
 				packet.Data = []byte("invalid data")
 			},
 			sdkerrors.ErrUnknownRequest,
+			false,
+		},
+		{
+			"invalid acknowledgement",
+			func() {
+				ack = []byte("invalid ack")
+			},
+			ibcerrors.ErrUnknownRequest,
+			false,
+		},
+		{
+			"cannot refund already acknowledged packet",
+			func() {
+				ack = channeltypes.NewErrorAcknowledgement(ibcerrors.ErrInsufficientFunds).Acknowledgement()
+
+				cbs, ok := suite.chainA.App.GetIBCKeeper().PortKeeper.Router.GetRoute(ibctesting.TransferPort)
+				suite.Require().True(ok)
+
+				suite.Require().NoError(cbs.OnAcknowledgementPacket(suite.chainA.GetContext(), packet, ack, suite.chainA.SenderAccount.GetAddress()))
+			},
+			errors.New("unable to unescrow tokens"),
 			false,
 		},
 	}
@@ -476,5 +517,71 @@ func (suite *TransferTestSuite) TestOnTimeoutPacket() {
 				suite.Require().Contains(err.Error(), tc.expError.Error())
 			}
 		})
+	}
+}
+
+func (suite *TransferTestSuite) TestPacketDataUnmarshalerInterface() {
+	var (
+		sender   = sdk.AccAddress(secp256k1.GenPrivKey().PubKey().Address()).String()
+		receiver = sdk.AccAddress(secp256k1.GenPrivKey().PubKey().Address()).String()
+
+		data          []byte
+		expPacketData types.FungibleTokenPacketData
+	)
+
+	testCases := []struct {
+		name     string
+		malleate func()
+		expPass  bool
+	}{
+		{
+			"success: valid packet data with memo",
+			func() {
+				expPacketData = types.FungibleTokenPacketData{
+					Denom:    ibctesting.TestCoin.Denom,
+					Amount:   ibctesting.TestCoin.Amount.String(),
+					Sender:   sender,
+					Receiver: receiver,
+					Memo:     "some memo",
+				}
+				data = expPacketData.GetBytes()
+			},
+			true,
+		},
+		{
+			"success: valid packet data without memo",
+			func() {
+				expPacketData = types.FungibleTokenPacketData{
+					Denom:    ibctesting.TestCoin.Denom,
+					Amount:   ibctesting.TestCoin.Amount.String(),
+					Sender:   sender,
+					Receiver: receiver,
+					Memo:     "",
+				}
+				data = expPacketData.GetBytes()
+			},
+			true,
+		},
+		{
+			"failure: invalid packet data",
+			func() {
+				data = []byte("invalid packet data")
+			},
+			false,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc.malleate()
+
+		packetData, err := transfer.IBCModule{}.UnmarshalPacketData(data)
+
+		if tc.expPass {
+			suite.Require().NoError(err)
+			suite.Require().Equal(expPacketData, packetData)
+		} else {
+			suite.Require().Error(err)
+			suite.Require().Nil(packetData)
+		}
 	}
 }

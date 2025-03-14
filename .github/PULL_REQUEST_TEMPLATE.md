@@ -19,7 +19,7 @@ closes: #XXXX
 type: commit message
 ```
 
-see the [guidelines](../CONTRIBUTING.md#commit-messages) for commit messages. (view raw markdown for examples)
+see the [guidelines](https://github.com/cosmos/ibc-go/blob/main/CONTRIBUTING.md#commit-messages) for commit messages. (view raw markdown for examples)
 
 
 <!--
@@ -43,10 +43,10 @@ write a little note why.
 
 - [ ] Targeted PR against correct branch (see [CONTRIBUTING.md](https://github.com/cosmos/ibc-go/blob/master/CONTRIBUTING.md#pr-targeting)).
 - [ ] Linked to Github issue with discussion and accepted design OR link to spec that describes this work.
-- [ ] Code follows the [module structure standards](https://github.com/cosmos/cosmos-sdk/blob/main/docs/build/building-modules/11-structure.md).
+- [ ] Code follows the [module structure standards](https://github.com/cosmos/cosmos-sdk/blob/main/docs/build/building-modules/11-structure.md) and [Go style guide](../docs/dev/go-style-guide.md).
 - [ ] Wrote unit and integration [tests](https://github.com/cosmos/ibc-go/blob/master/CONTRIBUTING.md#testing).
 - [ ] Updated relevant documentation (`docs/`) or specification (`x/<module>/spec/`).
 - [ ] Added relevant `godoc` [comments](https://blog.golang.org/godoc-documenting-go-code).
-- [ ] Provide a [commit message](../CONTRIBUTING.md#commit-messages) to be used for the changelog entry in the PR description for review.
+- [ ] Provide a [commit message](https://github.com/cosmos/ibc-go/blob/main/CONTRIBUTING.md#commit-messages) to be used for the changelog entry in the PR description for review.
 - [ ] Re-reviewed `Files changed` in the Github PR explorer.
 - [ ] Review `Codecov Report` in the comment section below once CI passes.

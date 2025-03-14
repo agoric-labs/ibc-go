@@ -7,13 +7,13 @@ import (
 	"sort"
 	"strings"
 
+	tmbytes "github.com/cometbft/cometbft/libs/bytes"
+	tmtypes "github.com/cometbft/cometbft/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
-	tmbytes "github.com/tendermint/tendermint/libs/bytes"
-	tmtypes "github.com/tendermint/tendermint/types"
 
-	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
-	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
+	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
+	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
 )
 
 // ParseDenomTrace parses a string with the ibc prefix (denom trace) and the base denomination
@@ -73,6 +73,11 @@ func (dt DenomTrace) GetFullDenomPath() string {
 		return dt.BaseDenom
 	}
 	return dt.GetPrefix() + dt.BaseDenom
+}
+
+// IsNativeDenom returns true if the denomination is native, thus containing no trace history.
+func (dt DenomTrace) IsNativeDenom() bool {
+	return dt.Path == ""
 }
 
 // extractPathAndBaseFromFullDenom returns the trace path and the base denom from

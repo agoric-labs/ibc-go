@@ -8,17 +8,17 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
-	"github.com/gogo/protobuf/proto"
+	"github.com/cosmos/gogoproto/proto"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/cosmos/ibc-go/v6/modules/apps/27-interchain-accounts/host/types"
-	icatypes "github.com/cosmos/ibc-go/v6/modules/apps/27-interchain-accounts/types"
-	feetypes "github.com/cosmos/ibc-go/v6/modules/apps/29-fee/types"
-	clienttypes "github.com/cosmos/ibc-go/v6/modules/core/02-client/types"
-	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
-	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
-	"github.com/cosmos/ibc-go/v6/modules/core/exported"
-	ibctesting "github.com/cosmos/ibc-go/v6/testing"
+	"github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/host/types"
+	icatypes "github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/types"
+	feetypes "github.com/cosmos/ibc-go/v7/modules/apps/29-fee/types"
+	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
+	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
+	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
+	"github.com/cosmos/ibc-go/v7/modules/core/exported"
+	ibctesting "github.com/cosmos/ibc-go/v7/testing"
 )
 
 var (
@@ -78,7 +78,7 @@ func RegisterInterchainAccount(endpoint *ibctesting.Endpoint, owner string) erro
 
 	channelSequence := endpoint.Chain.App.GetIBCKeeper().ChannelKeeper.GetNextChannelSequence(endpoint.Chain.GetContext())
 
-	if err := endpoint.Chain.GetSimApp().ICAControllerKeeper.RegisterInterchainAccount(endpoint.Chain.GetContext(), endpoint.ConnectionID, owner, endpoint.ChannelConfig.Version); err != nil {
+	if err := endpoint.Chain.GetSimApp().ICAControllerKeeper.RegisterInterchainAccountWithOrdering(endpoint.Chain.GetContext(), endpoint.ConnectionID, owner, endpoint.ChannelConfig.Version, channeltypes.ORDERED); err != nil {
 		return err
 	}
 
@@ -140,7 +140,12 @@ func (suite *InterchainAccountsTestSuite) TestOnChanOpenTry() {
 		expPass  bool
 	}{
 		{
-			"success", func() {}, true,
+			"success w/ ORDERED channel", func() {}, true,
+		},
+		{
+			"success w/ UNORDERED channel", func() {
+				channel.Ordering = channeltypes.UNORDERED
+			}, true,
 		},
 		{
 			"account address generation is block dependent", func() {
@@ -168,11 +173,6 @@ func (suite *InterchainAccountsTestSuite) TestOnChanOpenTry() {
 					return "", fmt.Errorf("mock ica auth fails")
 				}
 			}, true,
-		},
-		{
-			"ICA callback fails - invalid channel order", func() {
-				channel.Ordering = channeltypes.UNORDERED
-			}, false,
 		},
 	}
 
@@ -251,7 +251,8 @@ func (suite *InterchainAccountsTestSuite) TestChanOpenAck() {
 	// commit state changes so proof can be created
 	suite.chainA.NextBlock()
 
-	path.EndpointB.UpdateClient()
+	err = path.EndpointB.UpdateClient()
+	suite.Require().NoError(err)
 
 	// query proof from ChainA
 	channelKey := host.ChannelKey(path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID)
@@ -666,9 +667,11 @@ func (suite *InterchainAccountsTestSuite) TestControlAccountAfterChannelClose() 
 	params := types.NewParams(true, []string{sdk.MsgTypeURL(msg)})
 	suite.chainB.GetSimApp().ICAHostKeeper.SetParams(suite.chainB.GetContext(), params)
 
+	//nolint: staticcheck // SA1019: ibctesting.FirstConnectionID is deprecated: use path.EndpointA.ConnectionID instead. (staticcheck)
 	_, err = suite.chainA.GetSimApp().ICAControllerKeeper.SendTx(suite.chainA.GetContext(), nil, ibctesting.FirstConnectionID, path.EndpointA.ChannelConfig.PortID, icaPacketData, ^uint64(0))
 	suite.Require().NoError(err)
-	path.EndpointB.UpdateClient()
+	err = path.EndpointB.UpdateClient()
+	suite.Require().NoError(err)
 
 	// relay the packet
 	packetRelay := channeltypes.NewPacket(icaPacketData.GetBytes(), 1, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, clienttypes.ZeroHeight(), ^uint64(0))
@@ -682,9 +685,9 @@ func (suite *InterchainAccountsTestSuite) TestControlAccountAfterChannelClose() 
 	suite.assertBalance(icaAddr, expBalAfterFirstSend)
 
 	// close the channel
-	err = path.EndpointA.SetChannelClosed()
+	err = path.EndpointA.SetChannelState(channeltypes.CLOSED)
 	suite.Require().NoError(err)
-	err = path.EndpointB.SetChannelClosed()
+	err = path.EndpointB.SetChannelState(channeltypes.CLOSED)
 	suite.Require().NoError(err)
 
 	// open a new channel on the same port
@@ -692,9 +695,11 @@ func (suite *InterchainAccountsTestSuite) TestControlAccountAfterChannelClose() 
 	path.EndpointB.ChannelID = ""
 	suite.coordinator.CreateChannels(path)
 
+	//nolint: staticcheck // SA1019: ibctesting.FirstConnectionID is deprecated: use path.EndpointA.ConnectionID instead. (staticcheck)
 	_, err = suite.chainA.GetSimApp().ICAControllerKeeper.SendTx(suite.chainA.GetContext(), nil, ibctesting.FirstConnectionID, path.EndpointA.ChannelConfig.PortID, icaPacketData, ^uint64(0))
 	suite.Require().NoError(err)
-	path.EndpointB.UpdateClient()
+	err = path.EndpointB.UpdateClient()
+	suite.Require().NoError(err)
 
 	// relay the packet
 	packetRelay = channeltypes.NewPacket(icaPacketData.GetBytes(), 1, path.EndpointA.ChannelConfig.PortID, path.EndpointA.ChannelID, path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID, clienttypes.ZeroHeight(), ^uint64(0))

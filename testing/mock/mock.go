@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -12,15 +13,17 @@ import (
 	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
-	abci "github.com/tendermint/tendermint/abci/types"
 
-	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
-	porttypes "github.com/cosmos/ibc-go/v6/modules/core/05-port/types"
-	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
+	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
+	porttypes "github.com/cosmos/ibc-go/v7/modules/core/05-port/types"
+	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
+	"github.com/cosmos/ibc-go/v7/modules/core/exported"
 )
 
 const (
 	ModuleName = "mock"
+
+	MemStoreKey = "memory:mock"
 
 	PortID  = ModuleName
 	Version = "mock-version"
@@ -35,9 +38,12 @@ var (
 	MockRecvCanaryCapabilityName    = "mock receive canary capability name"
 	MockAckCanaryCapabilityName     = "mock acknowledgement canary capability name"
 	MockTimeoutCanaryCapabilityName = "mock timeout canary capability name"
+	// MockApplicationCallbackError should be returned when an application callback should fail. It is possible to
+	// test that this error was returned using ErrorIs.
+	MockApplicationCallbackError error = &applicationCallbackError{}
 )
 
-var _ porttypes.IBCModule = IBCModule{}
+var _ porttypes.IBCModule = (*IBCModule)(nil)
 
 // Expected Interface
 // PortKeeper defines the expected IBC port keeper
@@ -100,21 +106,6 @@ func NewAppModule(pk PortKeeper) AppModule {
 // RegisterInvariants implements the AppModule interface.
 func (AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {}
 
-// Route implements the AppModule interface.
-func (am AppModule) Route() sdk.Route {
-	return sdk.NewRoute(ModuleName, nil)
-}
-
-// QuerierRoute implements the AppModule interface.
-func (AppModule) QuerierRoute() string {
-	return ""
-}
-
-// LegacyQuerierHandler implements the AppModule interface.
-func (am AppModule) LegacyQuerierHandler(*codec.LegacyAmino) sdk.Querier {
-	return nil
-}
-
 // RegisterServices implements the AppModule interface.
 func (am AppModule) RegisterServices(module.Configurator) {}
 
@@ -149,4 +140,19 @@ func (am AppModule) BeginBlock(ctx sdk.Context, req abci.RequestBeginBlock) {
 // EndBlock implements the AppModule interface
 func (am AppModule) EndBlock(ctx sdk.Context, req abci.RequestEndBlock) []abci.ValidatorUpdate {
 	return []abci.ValidatorUpdate{}
+}
+
+var _ exported.Path = KeyPath{}
+
+// KeyPath defines a placeholder struct which implements the exported.Path interface
+type KeyPath struct{}
+
+// String implements the exported.Path interface
+func (KeyPath) String() string {
+	return ""
+}
+
+// Empty implements the exported.Path interface
+func (KeyPath) Empty() bool {
+	return false
 }
