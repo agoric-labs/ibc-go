@@ -119,7 +119,7 @@ func (rrd RedundantRelayDecorator) updateClientCheckTx(ctx sdk.Context, msg *cli
 
 	clientState, found := rrd.k.ClientKeeper.GetClientState(ctx, msg.ClientId)
 	if !found {
-		return errorsmod.Wrapf(clienttypes.ErrClientNotFound, msg.ClientId)
+		return errorsmod.Wrap(clienttypes.ErrClientNotFound, msg.ClientId)
 	}
 
 	if status := rrd.k.ClientKeeper.GetClientStatus(ctx, clientState, msg.ClientId); status != exported.Active {
