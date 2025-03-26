@@ -42,6 +42,7 @@ require (
 	cosmossdk.io/core v0.5.1 // indirect
 	cosmossdk.io/depinject v1.0.0-alpha.4 // indirect
 	cosmossdk.io/log v1.4.1 // indirect
+	cosmossdk.io/simapp v0.0.0-00010101000000-000000000000 // indirect
 	filippo.io/edwards25519 v1.0.0 // indirect
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
 	github.com/99designs/keyring v1.2.1 // indirect
@@ -195,7 +196,15 @@ replace (
 )
 
 replace (
+	cosmossdk.io/api => github.com/agoric-labs/cosmos-sdk/api v0.0.0-20250326031203-e68e6747bede
+	cosmossdk.io/core => github.com/agoric-labs/cosmos-sdk/core v0.0.0-20250326031203-e68e6747bede
+	cosmossdk.io/depinject => github.com/agoric-labs/cosmos-sdk/depinject v0.0.0-20250326031203-e68e6747bede
+	cosmossdk.io/errors => github.com/agoric-labs/cosmos-sdk/errors v0.0.0-20250326031203-e68e6747bede
+	cosmossdk.io/math => github.com/agoric-labs/cosmos-sdk/math v0.0.0-20250326031203-e68e6747bede
+	cosmossdk.io/simapp => github.com/agoric-labs/cosmos-sdk/simapp v0.0.0-20250326031203-e68e6747bede
+	cosmossdk.io/tools/rosetta => github.com/agoric-labs/cosmos-sdk/tools/rosetta v0.0.0-20250326031203-e68e6747bede
+
 	github.com/cometbft/cometbft => github.com/agoric-labs/cometbft v0.37.15-alpha.agoric.1
-	github.com/cosmos/cosmos-sdk => github.com/agoric-labs/cosmos-sdk v0.46.16-alpha.agoric.2.5.0.20250313191437-99bd818309e4
+	github.com/cosmos/cosmos-sdk => github.com/agoric-labs/cosmos-sdk v0.47.17-alpha.agoric.1
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 )

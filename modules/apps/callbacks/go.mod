@@ -191,7 +191,15 @@ require (
 replace golang.org/x/exp => golang.org/x/exp v0.0.0-20230711153332-06a737ee72cb
 
 replace (
+	cosmossdk.io/api => github.com/agoric-labs/cosmos-sdk/api v0.0.0-20250326031203-e68e6747bede
+	cosmossdk.io/core => github.com/agoric-labs/cosmos-sdk/core v0.0.0-20250326031203-e68e6747bede
+	cosmossdk.io/depinject => github.com/agoric-labs/cosmos-sdk/depinject v0.0.0-20250326031203-e68e6747bede
+	cosmossdk.io/errors => github.com/agoric-labs/cosmos-sdk/errors v0.0.0-20250326031203-e68e6747bede
+	cosmossdk.io/math => github.com/agoric-labs/cosmos-sdk/math v0.0.0-20250326031203-e68e6747bede
+	cosmossdk.io/simapp => github.com/agoric-labs/cosmos-sdk/simapp v0.0.0-20250326031203-e68e6747bede
+	cosmossdk.io/tools/rosetta => github.com/agoric-labs/cosmos-sdk/tools/rosetta v0.0.0-20250326031203-e68e6747bede
+
 	github.com/cometbft/cometbft => github.com/agoric-labs/cometbft v0.37.15-alpha.agoric.1
-	github.com/cosmos/cosmos-sdk => github.com/agoric-labs/cosmos-sdk v0.46.16-alpha.agoric.2.5.0.20250313191437-99bd818309e4
+	github.com/cosmos/cosmos-sdk => github.com/agoric-labs/cosmos-sdk v0.47.17-alpha.agoric.1
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 )
