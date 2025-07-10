@@ -4,16 +4,20 @@ import (
 	"fmt"
 	"strings"
 
-	metrics "github.com/armon/go-metrics"
+	metrics "github.com/hashicorp/go-metrics"
+
+	errorsmod "cosmossdk.io/errors"
+	sdkmath "cosmossdk.io/math"
+
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
-	"github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
-	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
-	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
-	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
-	coretypes "github.com/cosmos/ibc-go/v7/modules/core/types"
+	"github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
+	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
+	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
+	host "github.com/cosmos/ibc-go/v8/modules/core/24-host"
+	ibcerrors "github.com/cosmos/ibc-go/v8/modules/core/errors"
+	coretypes "github.com/cosmos/ibc-go/v8/modules/core/types"
 )
 
 // sendTransfer handles transfer sending logic. There are 2 possible cases:
@@ -61,7 +65,7 @@ func (k Keeper) sendTransfer(
 ) (uint64, error) {
 	channel, found := k.channelKeeper.GetChannel(ctx, sourcePort, sourceChannel)
 	if !found {
-		return 0, sdkerrors.Wrapf(channeltypes.ErrChannelNotFound, "port ID (%s) channel ID (%s)", sourcePort, sourceChannel)
+		return 0, errorsmod.Wrapf(channeltypes.ErrChannelNotFound, "port ID (%s) channel ID (%s)", sourcePort, sourceChannel)
 	}
 
 	destinationPort := channel.GetCounterparty().GetPortID()
@@ -71,7 +75,7 @@ func (k Keeper) sendTransfer(
 	// See spec for this logic: https://github.com/cosmos/ibc/tree/master/spec/app/ics-020-fungible-token-transfer#packet-relay
 	channelCap, ok := k.scopedKeeper.GetCapability(ctx, host.ChannelCapabilityPath(sourcePort, sourceChannel))
 	if !ok {
-		return 0, sdkerrors.Wrap(channeltypes.ErrChannelCapabilityNotFound, "module does not own channel capability")
+		return 0, errorsmod.Wrap(channeltypes.ErrChannelCapabilityNotFound, "module does not own channel capability")
 	}
 
 	// NOTE: denomination and hex hash correctness checked during msg.ValidateBasic
@@ -127,7 +131,7 @@ func (k Keeper) sendTransfer(
 			// NOTE: should not happen as the module account was
 			// retrieved on the step above and it has enough balace
 			// to burn.
-			panic(fmt.Sprintf("cannot burn coins after a successful send to a module account: %v", err))
+			panic(fmt.Errorf("cannot burn coins after a successful send to a module account: %v", err))
 		}
 	}
 
@@ -167,23 +171,23 @@ func (k Keeper) sendTransfer(
 func (k Keeper) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, data types.FungibleTokenPacketData) error {
 	// validate packet data upon receiving
 	if err := data.ValidateBasic(); err != nil {
-		return err
+		return errorsmod.Wrapf(err, "error validating ICS-20 transfer packet data")
 	}
 
-	if !k.GetReceiveEnabled(ctx) {
+	if !k.GetParams(ctx).ReceiveEnabled {
 		return types.ErrReceiveDisabled
 	}
 
 	// decode the receiver address
 	receiver, err := sdk.AccAddressFromBech32(data.Receiver)
 	if err != nil {
-		return err
+		return errorsmod.Wrapf(err, "failed to decode receiver address: %s", data.Receiver)
 	}
 
 	// parse the transfer amount
-	transferAmount, ok := sdk.NewIntFromString(data.Amount)
+	transferAmount, ok := sdkmath.NewIntFromString(data.Amount)
 	if !ok {
-		return sdkerrors.Wrapf(types.ErrInvalidAmount, "unable to parse transfer amount (%s) into math.Int", data.Amount)
+		return errorsmod.Wrapf(types.ErrInvalidAmount, "unable to parse transfer amount: %s", data.Amount)
 	}
 
 	labels := []metrics.Label{
@@ -217,7 +221,7 @@ func (k Keeper) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, data t
 		token := sdk.NewCoin(denom, transferAmount)
 
 		if k.bankKeeper.BlockedAddr(receiver) {
-			return sdkerrors.Wrapf(sdkerrors.ErrUnauthorized, "%s is not allowed to receive funds", receiver)
+			return errorsmod.Wrapf(ibcerrors.ErrUnauthorized, "%s is not allowed to receive funds", receiver)
 		}
 
 		escrowAddress := types.GetEscrowAddress(packet.GetDestPort(), packet.GetDestChannel())
@@ -262,6 +266,10 @@ func (k Keeper) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, data t
 	}
 
 	voucherDenom := denomTrace.IBCDenom()
+	if !k.bankKeeper.HasDenomMetaData(ctx, voucherDenom) {
+		k.setDenomMetadata(ctx, denomTrace)
+	}
+
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			types.EventTypeDenomTrace,
@@ -275,14 +283,14 @@ func (k Keeper) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, data t
 	if err := k.bankKeeper.MintCoins(
 		ctx, types.ModuleName, sdk.NewCoins(voucher),
 	); err != nil {
-		return err
+		return errorsmod.Wrap(err, "failed to mint IBC tokens")
 	}
 
 	// send to receiver
 	if err := k.bankKeeper.SendCoinsFromModuleToAccount(
 		ctx, types.ModuleName, receiver, sdk.NewCoins(voucher),
 	); err != nil {
-		return err
+		return errorsmod.Wrapf(err, "failed to send coins to receiver %s", receiver.String())
 	}
 
 	defer func() {
@@ -338,9 +346,9 @@ func (k Keeper) refundPacketToken(ctx sdk.Context, packet channeltypes.Packet, d
 	trace := types.ParseDenomTrace(data.Denom)
 
 	// parse the transfer amount
-	transferAmount, ok := sdk.NewIntFromString(data.Amount)
+	transferAmount, ok := sdkmath.NewIntFromString(data.Amount)
 	if !ok {
-		return sdkerrors.Wrapf(types.ErrInvalidAmount, "unable to parse transfer amount (%s) into math.Int", data.Amount)
+		return errorsmod.Wrapf(types.ErrInvalidAmount, "unable to parse transfer amount (%s) into math.Int", data.Amount)
 	}
 	token := sdk.NewCoin(trace.IBCDenom(), transferAmount)
 
@@ -364,7 +372,7 @@ func (k Keeper) refundPacketToken(ctx sdk.Context, packet channeltypes.Packet, d
 	}
 
 	if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, sender, sdk.NewCoins(token)); err != nil {
-		panic(fmt.Sprintf("unable to send coins from module to account despite previously minting coins to module account: %v", err))
+		panic(fmt.Errorf("unable to send coins from module to account despite previously minting coins to module account: %v", err))
 	}
 
 	return nil
@@ -394,7 +402,7 @@ func (k Keeper) unescrowToken(ctx sdk.Context, escrowAddress, receiver sdk.AccAd
 		// counterparty module. The bug may occur in bank or any part of the code that allows
 		// the escrow address to be drained. A malicious counterparty module could drain the
 		// escrow address by allowing more tokens to be sent back then were escrowed.
-		return sdkerrors.Wrap(err, "unable to unescrow tokens, this may be caused by a malicious counterparty module or a bug: please open an issue on counterparty module")
+		return errorsmod.Wrap(err, "unable to unescrow tokens, this may be caused by a malicious counterparty module or a bug: please open an issue on counterparty module")
 	}
 
 	// track the total amount in escrow keyed by denomination to allow for efficient iteration
@@ -413,12 +421,12 @@ func (k Keeper) DenomPathFromHash(ctx sdk.Context, denom string) (string, error)
 
 	hash, err := types.ParseHexHash(hexHash)
 	if err != nil {
-		return "", sdkerrors.Wrap(types.ErrInvalidDenomForTransfer, err.Error())
+		return "", errorsmod.Wrap(types.ErrInvalidDenomForTransfer, err.Error())
 	}
 
 	denomTrace, found := k.GetDenomTrace(ctx, hash)
 	if !found {
-		return "", sdkerrors.Wrap(types.ErrTraceNotFound, hexHash)
+		return "", errorsmod.Wrap(types.ErrTraceNotFound, hexHash)
 	}
 
 	fullDenomPath := denomTrace.GetFullDenomPath()

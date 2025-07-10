@@ -16,11 +16,11 @@ import (
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
-	"github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/host/types"
-	icatypes "github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/types"
-	transfertypes "github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
-	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
-	ibctesting "github.com/cosmos/ibc-go/v7/testing"
+	"github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/host/types"
+	icatypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/types"
+	transfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
+	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
+	ibctesting "github.com/cosmos/ibc-go/v8/testing"
 )
 
 func (suite *KeeperTestSuite) TestOnRecvPacket() {
@@ -50,11 +50,13 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 				proposalMsg, err := govv1.NewLegacyContent(testProposal, interchainAccountAddr)
 				suite.Require().NoError(err)
 
-				proposal, err := govv1.NewProposal([]sdk.Msg{proposalMsg}, govtypes.DefaultStartingProposalID, suite.chainA.GetContext().BlockTime(), suite.chainA.GetContext().BlockTime(), "test proposal", "title", "Description", sdk.AccAddress(interchainAccountAddr))
+				proposal, err := govv1.NewProposal([]sdk.Msg{proposalMsg}, govtypes.DefaultStartingProposalID, suite.chainA.GetContext().BlockTime(), suite.chainA.GetContext().BlockTime(), "test proposal", "title", "Description", sdk.AccAddress(interchainAccountAddr), false)
 				suite.Require().NoError(err)
 
-				suite.chainB.GetSimApp().GovKeeper.SetProposal(suite.chainB.GetContext(), proposal)
-				suite.chainB.GetSimApp().GovKeeper.ActivateVotingPeriod(suite.chainB.GetContext(), proposal)
+				err = suite.chainB.GetSimApp().GovKeeper.SetProposal(suite.chainB.GetContext(), proposal)
+				suite.Require().NoError(err)
+				err = suite.chainB.GetSimApp().GovKeeper.ActivateVotingPeriod(suite.chainB.GetContext(), proposal)
+				suite.Require().NoError(err)
 
 				msg := &govtypes.MsgVote{
 					ProposalId: govtypes.DefaultStartingProposalID,
@@ -62,7 +64,7 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 					Option:     govtypes.OptionYes,
 				}
 
-				data, err := icatypes.SerializeCosmosTxWithEncoding(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
+				data, err := icatypes.SerializeCosmosTx(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
 				suite.Require().NoError(err)
 
 				icaPacketData := icatypes.InterchainAccountPacketData{
@@ -86,10 +88,10 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 				msg := &banktypes.MsgSend{
 					FromAddress: interchainAccountAddr,
 					ToAddress:   suite.chainB.SenderAccount.GetAddress().String(),
-					Amount:      sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(100))),
+					Amount:      sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(100))),
 				}
 
-				data, err := icatypes.SerializeCosmosTxWithEncoding(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
+				data, err := icatypes.SerializeCosmosTx(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
 				suite.Require().NoError(err)
 
 				icaPacketData := icatypes.InterchainAccountPacketData{
@@ -114,10 +116,10 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 				msg := &stakingtypes.MsgDelegate{
 					DelegatorAddress: interchainAccountAddr,
 					ValidatorAddress: validatorAddr.String(),
-					Amount:           sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(5000)),
+					Amount:           sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(5000)),
 				}
 
-				data, err := icatypes.SerializeCosmosTxWithEncoding(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
+				data, err := icatypes.SerializeCosmosTx(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
 				suite.Require().NoError(err)
 
 				icaPacketData := icatypes.InterchainAccountPacketData{
@@ -142,16 +144,16 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 				msgDelegate := &stakingtypes.MsgDelegate{
 					DelegatorAddress: interchainAccountAddr,
 					ValidatorAddress: validatorAddr.String(),
-					Amount:           sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(5000)),
+					Amount:           sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(5000)),
 				}
 
 				msgUndelegate := &stakingtypes.MsgUndelegate{
 					DelegatorAddress: interchainAccountAddr,
 					ValidatorAddress: validatorAddr.String(),
-					Amount:           sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(5000)),
+					Amount:           sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(5000)),
 				}
 
-				data, err := icatypes.SerializeCosmosTxWithEncoding(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msgDelegate, msgUndelegate}, encoding)
+				data, err := icatypes.SerializeCosmosTx(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msgDelegate, msgUndelegate}, encoding)
 				suite.Require().NoError(err)
 
 				icaPacketData := icatypes.InterchainAccountPacketData{
@@ -177,16 +179,16 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 					Description: "tokens for all!",
 				}
 
-				any, err := codectypes.NewAnyWithValue(testProposal)
+				protoAny, err := codectypes.NewAnyWithValue(testProposal)
 				suite.Require().NoError(err)
 
 				msg := &govtypes.MsgSubmitProposal{
-					Content:        any,
-					InitialDeposit: sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(5000))),
+					Content:        protoAny,
+					InitialDeposit: sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(100000))),
 					Proposer:       interchainAccountAddr,
 				}
 
-				data, err := icatypes.SerializeCosmosTxWithEncoding(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
+				data, err := icatypes.SerializeCosmosTx(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
 				suite.Require().NoError(err)
 
 				icaPacketData := icatypes.InterchainAccountPacketData{
@@ -216,11 +218,13 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 				proposalMsg, err := govv1.NewLegacyContent(testProposal, interchainAccountAddr)
 				suite.Require().NoError(err)
 
-				proposal, err := govv1.NewProposal([]sdk.Msg{proposalMsg}, govtypes.DefaultStartingProposalID, suite.chainA.GetContext().BlockTime(), suite.chainA.GetContext().BlockTime(), "test proposal", "title", "description", sdk.AccAddress(interchainAccountAddr))
+				proposal, err := govv1.NewProposal([]sdk.Msg{proposalMsg}, govtypes.DefaultStartingProposalID, suite.chainA.GetContext().BlockTime(), suite.chainA.GetContext().BlockTime(), "test proposal", "title", "description", sdk.AccAddress(interchainAccountAddr), false)
 				suite.Require().NoError(err)
 
-				suite.chainB.GetSimApp().GovKeeper.SetProposal(suite.chainB.GetContext(), proposal)
-				suite.chainB.GetSimApp().GovKeeper.ActivateVotingPeriod(suite.chainB.GetContext(), proposal)
+				err = suite.chainB.GetSimApp().GovKeeper.SetProposal(suite.chainB.GetContext(), proposal)
+				suite.Require().NoError(err)
+				err = suite.chainB.GetSimApp().GovKeeper.ActivateVotingPeriod(suite.chainB.GetContext(), proposal)
+				suite.Require().NoError(err)
 
 				msg := &govtypes.MsgVote{
 					ProposalId: govtypes.DefaultStartingProposalID,
@@ -228,7 +232,7 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 					Option:     govtypes.OptionYes,
 				}
 
-				data, err := icatypes.SerializeCosmosTxWithEncoding(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
+				data, err := icatypes.SerializeCosmosTx(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
 				suite.Require().NoError(err)
 
 				icaPacketData := icatypes.InterchainAccountPacketData{
@@ -250,11 +254,11 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 				suite.Require().True(found)
 
 				msg := &disttypes.MsgFundCommunityPool{
-					Amount:    sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(5000))),
+					Amount:    sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(5000))),
 					Depositor: interchainAccountAddr,
 				}
 
-				data, err := icatypes.SerializeCosmosTxWithEncoding(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
+				data, err := icatypes.SerializeCosmosTx(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
 				suite.Require().NoError(err)
 
 				icaPacketData := icatypes.InterchainAccountPacketData{
@@ -286,7 +290,7 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 					},
 				})
 
-				data, err := icatypes.SerializeCosmosTxWithEncoding(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
+				data, err := icatypes.SerializeCosmosTx(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
 				suite.Require().NoError(err)
 
 				icaPacketData := icatypes.InterchainAccountPacketData{
@@ -312,7 +316,7 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 					WithdrawAddress:  suite.chainB.SenderAccount.GetAddress().String(),
 				}
 
-				data, err := icatypes.SerializeCosmosTxWithEncoding(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
+				data, err := icatypes.SerializeCosmosTx(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
 				suite.Require().NoError(err)
 
 				icaPacketData := icatypes.InterchainAccountPacketData{
@@ -330,11 +334,7 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 		{
 			"interchain account successfully executes transfertypes.MsgTransfer",
 			func(encoding string) {
-				transferPath := ibctesting.NewPath(suite.chainB, suite.chainC)
-				transferPath.EndpointA.ChannelConfig.PortID = ibctesting.TransferPort
-				transferPath.EndpointB.ChannelConfig.PortID = ibctesting.TransferPort
-				transferPath.EndpointA.ChannelConfig.Version = transfertypes.Version
-				transferPath.EndpointB.ChannelConfig.Version = transfertypes.Version
+				transferPath := ibctesting.NewTransferPath(suite.chainB, suite.chainC)
 
 				suite.coordinator.Setup(transferPath)
 
@@ -344,14 +344,14 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 				msg := &transfertypes.MsgTransfer{
 					SourcePort:       transferPath.EndpointA.ChannelConfig.PortID,
 					SourceChannel:    transferPath.EndpointA.ChannelID,
-					Token:            sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(100)),
+					Token:            sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(100)),
 					Sender:           interchainAccountAddr,
 					Receiver:         suite.chainA.SenderAccount.GetAddress().String(),
 					TimeoutHeight:    suite.chainB.GetTimeoutHeight(),
 					TimeoutTimestamp: uint64(0),
 				}
 
-				data, err := icatypes.SerializeCosmosTxWithEncoding(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
+				data, err := icatypes.SerializeCosmosTx(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
 				suite.Require().NoError(err)
 
 				icaPacketData := icatypes.InterchainAccountPacketData{
@@ -371,7 +371,7 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 			func(encoding string) {
 				msg := &banktypes.MsgSendResponse{}
 
-				data, err := icatypes.SerializeCosmosTxWithEncoding(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
+				data, err := icatypes.SerializeCosmosTx(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
 				suite.Require().NoError(err)
 
 				icaPacketData := icatypes.InterchainAccountPacketData{
@@ -410,7 +410,7 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 		{
 			"invalid packet type - UNSPECIFIED",
 			func(encoding string) {
-				data, err := icatypes.SerializeCosmosTxWithEncoding(suite.chainA.GetSimApp().AppCodec(), []proto.Message{&banktypes.MsgSend{}}, encoding)
+				data, err := icatypes.SerializeCosmosTx(suite.chainA.GetSimApp().AppCodec(), []proto.Message{&banktypes.MsgSend{}}, encoding)
 				suite.Require().NoError(err)
 
 				icaPacketData := icatypes.InterchainAccountPacketData{
@@ -427,7 +427,7 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 			func(encoding string) {
 				path.EndpointA.ChannelConfig.PortID = "invalid-port-id"
 
-				data, err := icatypes.SerializeCosmosTxWithEncoding(suite.chainA.GetSimApp().AppCodec(), []proto.Message{&banktypes.MsgSend{}}, encoding)
+				data, err := icatypes.SerializeCosmosTx(suite.chainA.GetSimApp().AppCodec(), []proto.Message{&banktypes.MsgSend{}}, encoding)
 				suite.Require().NoError(err)
 
 				icaPacketData := icatypes.InterchainAccountPacketData{
@@ -445,10 +445,10 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 				msg := &banktypes.MsgSend{
 					FromAddress: suite.chainB.SenderAccount.GetAddress().String(),
 					ToAddress:   suite.chainB.SenderAccount.GetAddress().String(),
-					Amount:      sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(100))),
+					Amount:      sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(100))),
 				}
 
-				data, err := icatypes.SerializeCosmosTxWithEncoding(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
+				data, err := icatypes.SerializeCosmosTx(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
 				suite.Require().NoError(err)
 
 				icaPacketData := icatypes.InterchainAccountPacketData{
@@ -466,10 +466,10 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 				msg := &banktypes.MsgSend{
 					FromAddress: suite.chainB.SenderAccount.GetAddress().String(), // unexpected signer
 					ToAddress:   suite.chainB.SenderAccount.GetAddress().String(),
-					Amount:      sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(100))),
+					Amount:      sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(100))),
 				}
 
-				data, err := icatypes.SerializeCosmosTxWithEncoding(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
+				data, err := icatypes.SerializeCosmosTx(suite.chainA.GetSimApp().AppCodec(), []proto.Message{msg}, encoding)
 				suite.Require().NoError(err)
 
 				icaPacketData := icatypes.InterchainAccountPacketData{
@@ -513,7 +513,7 @@ func (suite *KeeperTestSuite) TestOnRecvPacket() {
 				interchainAccount := suite.chainB.GetSimApp().AccountKeeper.GetAccount(suite.chainB.GetContext(), icaAddr)
 				suite.Require().Equal(interchainAccount.GetAddress().String(), storedAddr)
 
-				suite.fundICAWallet(suite.chainB.GetContext(), path.EndpointA.ChannelConfig.PortID, sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(10000))))
+				suite.fundICAWallet(suite.chainB.GetContext(), path.EndpointA.ChannelConfig.PortID, sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(1000000))))
 
 				tc.malleate(encoding) // malleate mutates test data
 
@@ -566,11 +566,13 @@ func (suite *KeeperTestSuite) TestJSONOnRecvPacket() {
 				proposalMsg, err := govv1.NewLegacyContent(testProposal, interchainAccountAddr)
 				suite.Require().NoError(err)
 
-				proposal, err := govv1.NewProposal([]sdk.Msg{proposalMsg}, govtypes.DefaultStartingProposalID, suite.chainA.GetContext().BlockTime(), suite.chainA.GetContext().BlockTime(), "test proposal", "title", "Description", sdk.AccAddress(interchainAccountAddr))
+				proposal, err := govv1.NewProposal([]sdk.Msg{proposalMsg}, govtypes.DefaultStartingProposalID, suite.chainA.GetContext().BlockTime(), suite.chainA.GetContext().BlockTime(), "test proposal", "title", "Description", sdk.AccAddress(interchainAccountAddr), false)
 				suite.Require().NoError(err)
 
-				suite.chainB.GetSimApp().GovKeeper.SetProposal(suite.chainB.GetContext(), proposal)
-				suite.chainB.GetSimApp().GovKeeper.ActivateVotingPeriod(suite.chainB.GetContext(), proposal)
+				err = suite.chainB.GetSimApp().GovKeeper.SetProposal(suite.chainB.GetContext(), proposal)
+				suite.Require().NoError(err)
+				err = suite.chainB.GetSimApp().GovKeeper.ActivateVotingPeriod(suite.chainB.GetContext(), proposal)
+				suite.Require().NoError(err)
 
 				msgBytes := []byte(`{
 					"messages": [
@@ -633,7 +635,7 @@ func (suite *KeeperTestSuite) TestJSONOnRecvPacket() {
 								"title": "IBC Gov Proposal",
 								"description": "tokens for all!"
 							},
-							"initial_deposit": [{ "denom": "stake", "amount": "5000" }],
+							"initial_deposit": [{ "denom": "stake", "amount": "100000" }],
 							"proposer": "` + icaAddress + `"
 						}
 					]
@@ -662,11 +664,13 @@ func (suite *KeeperTestSuite) TestJSONOnRecvPacket() {
 				proposalMsg, err := govv1.NewLegacyContent(testProposal, interchainAccountAddr)
 				suite.Require().NoError(err)
 
-				proposal, err := govv1.NewProposal([]sdk.Msg{proposalMsg}, govtypes.DefaultStartingProposalID, suite.chainA.GetContext().BlockTime(), suite.chainA.GetContext().BlockTime(), "test proposal", "title", "description", sdk.AccAddress(interchainAccountAddr))
+				proposal, err := govv1.NewProposal([]sdk.Msg{proposalMsg}, govtypes.DefaultStartingProposalID, suite.chainA.GetContext().BlockTime(), suite.chainA.GetContext().BlockTime(), "test proposal", "title", "description", sdk.AccAddress(interchainAccountAddr), false)
 				suite.Require().NoError(err)
 
-				suite.chainB.GetSimApp().GovKeeper.SetProposal(suite.chainB.GetContext(), proposal)
-				suite.chainB.GetSimApp().GovKeeper.ActivateVotingPeriod(suite.chainB.GetContext(), proposal)
+				err = suite.chainB.GetSimApp().GovKeeper.SetProposal(suite.chainB.GetContext(), proposal)
+				suite.Require().NoError(err)
+				err = suite.chainB.GetSimApp().GovKeeper.ActivateVotingPeriod(suite.chainB.GetContext(), proposal)
+				suite.Require().NoError(err)
 
 				msgBytes := []byte(`{
 					"messages": [
@@ -702,7 +706,7 @@ func (suite *KeeperTestSuite) TestJSONOnRecvPacket() {
 								"title": "IBC Gov Proposal",
 								"description": "tokens for all!"
 							},
-							"initial_deposit": [{ "denom": "stake", "amount": "5000" }],
+							"initial_deposit": [{ "denom": "stake", "amount": "100000" }],
 							"proposer": "` + icaAddress + `"
 						},
 						{
@@ -734,11 +738,7 @@ func (suite *KeeperTestSuite) TestJSONOnRecvPacket() {
 		{
 			"interchain account successfully executes transfertypes.MsgTransfer",
 			func(icaAddress string) {
-				transferPath := ibctesting.NewPath(suite.chainB, suite.chainC)
-				transferPath.EndpointA.ChannelConfig.PortID = ibctesting.TransferPort
-				transferPath.EndpointB.ChannelConfig.PortID = ibctesting.TransferPort
-				transferPath.EndpointA.ChannelConfig.Version = transfertypes.Version
-				transferPath.EndpointB.ChannelConfig.Version = transfertypes.Version
+				transferPath := ibctesting.NewTransferPath(suite.chainB, suite.chainC)
 
 				suite.coordinator.Setup(transferPath)
 

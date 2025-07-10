@@ -6,8 +6,8 @@ import (
 
 	errorsmod "cosmossdk.io/errors"
 
-	porttypes "github.com/cosmos/ibc-go/v7/modules/core/05-port/types"
-	ibcexported "github.com/cosmos/ibc-go/v7/modules/core/exported"
+	porttypes "github.com/cosmos/ibc-go/v8/modules/core/05-port/types"
+	ibcexported "github.com/cosmos/ibc-go/v8/modules/core/exported"
 )
 
 /*
@@ -68,7 +68,7 @@ type CallbackData struct {
 // GetSourceCallbackData parses the packet data and returns the source callback data.
 func GetSourceCallbackData(
 	packetDataUnmarshaler porttypes.PacketDataUnmarshaler,
-	data []byte, srcPortID string, remainingGas, maxGas uint64,
+	data []byte, srcPortID string, remainingGas uint64, maxGas uint64,
 ) (CallbackData, error) {
 	return getCallbackData(packetDataUnmarshaler, data, srcPortID, remainingGas, maxGas, SourceCallbackKey)
 }

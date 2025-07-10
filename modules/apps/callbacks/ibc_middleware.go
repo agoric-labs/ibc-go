@@ -1,21 +1,26 @@
 package ibccallbacks
 
 import (
+	"errors"
 	"fmt"
 
+	errorsmod "cosmossdk.io/errors"
+	storetypes "cosmossdk.io/store/types"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
 
 	"github.com/cosmos/ibc-go/modules/apps/callbacks/types"
-	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
-	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
-	porttypes "github.com/cosmos/ibc-go/v7/modules/core/05-port/types"
-	ibcexported "github.com/cosmos/ibc-go/v7/modules/core/exported"
+	capabilitytypes "github.com/cosmos/ibc-go/modules/capability/types"
+	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
+	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
+	porttypes "github.com/cosmos/ibc-go/v8/modules/core/05-port/types"
+	ibcexported "github.com/cosmos/ibc-go/v8/modules/core/exported"
 )
 
 var (
 	_ porttypes.Middleware            = (*IBCMiddleware)(nil)
 	_ porttypes.PacketDataUnmarshaler = (*IBCMiddleware)(nil)
+	_ porttypes.UpgradableModule      = (*IBCMiddleware)(nil)
 )
 
 // IBCMiddleware implements the ICS26 callbacks for the ibc-callbacks middleware given
@@ -45,15 +50,15 @@ func NewIBCMiddleware(
 	}
 
 	if ics4Wrapper == nil {
-		panic(fmt.Errorf("ICS4Wrapper cannot be nil"))
+		panic(errors.New("ICS4Wrapper cannot be nil"))
 	}
 
 	if contractKeeper == nil {
-		panic(fmt.Errorf("contract keeper cannot be nil"))
+		panic(errors.New("contract keeper cannot be nil"))
 	}
 
 	if maxCallbackGas == 0 {
-		panic(fmt.Errorf("maxCallbackGas cannot be zero"))
+		panic(errors.New("maxCallbackGas cannot be zero"))
 	}
 
 	return IBCMiddleware{
@@ -127,7 +132,9 @@ func (im IBCMiddleware) OnAcknowledgementPacket(
 		return err
 	}
 
-	callbackData, err := types.GetSourceCallbackData(im.app, packet.GetData(), packet.GetSourcePort(), ctx.GasMeter().GasRemaining(), im.maxCallbackGas)
+	callbackData, err := types.GetSourceCallbackData(
+		im.app, packet.GetData(), packet.GetSourcePort(), ctx.GasMeter().GasRemaining(), im.maxCallbackGas,
+	)
 	// OnAcknowledgementPacket is not blocked if the packet does not opt-in to callbacks
 	if err != nil {
 		return nil
@@ -141,7 +148,10 @@ func (im IBCMiddleware) OnAcknowledgementPacket(
 
 	// callback execution errors are not allowed to block the packet lifecycle, they are only used in event emissions
 	err = im.processCallback(ctx, types.CallbackTypeAcknowledgementPacket, callbackData, callbackExecutor)
-	types.EmitCallbackEvent(ctx, packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence(), types.CallbackTypeAcknowledgementPacket, callbackData, err)
+	types.EmitCallbackEvent(
+		ctx, packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence(),
+		types.CallbackTypeAcknowledgementPacket, callbackData, err,
+	)
 
 	return nil
 }
@@ -156,7 +166,9 @@ func (im IBCMiddleware) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Pac
 		return err
 	}
 
-	callbackData, err := types.GetSourceCallbackData(im.app, packet.GetData(), packet.GetSourcePort(), ctx.GasMeter().GasRemaining(), im.maxCallbackGas)
+	callbackData, err := types.GetSourceCallbackData(
+		im.app, packet.GetData(), packet.GetSourcePort(), ctx.GasMeter().GasRemaining(), im.maxCallbackGas,
+	)
 	// OnTimeoutPacket is not blocked if the packet does not opt-in to callbacks
 	if err != nil {
 		return nil
@@ -168,7 +180,10 @@ func (im IBCMiddleware) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Pac
 
 	// callback execution errors are not allowed to block the packet lifecycle, they are only used in event emissions
 	err = im.processCallback(ctx, types.CallbackTypeTimeoutPacket, callbackData, callbackExecutor)
-	types.EmitCallbackEvent(ctx, packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence(), types.CallbackTypeTimeoutPacket, callbackData, err)
+	types.EmitCallbackEvent(
+		ctx, packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence(),
+		types.CallbackTypeTimeoutPacket, callbackData, err,
+	)
 
 	return nil
 }
@@ -187,7 +202,9 @@ func (im IBCMiddleware) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet
 		return ack
 	}
 
-	callbackData, err := types.GetDestCallbackData(im.app, packet.GetData(), packet.GetSourcePort(), ctx.GasMeter().GasRemaining(), im.maxCallbackGas)
+	callbackData, err := types.GetDestCallbackData(
+		im.app, packet.GetData(), packet.GetSourcePort(), ctx.GasMeter().GasRemaining(), im.maxCallbackGas,
+	)
 	// OnRecvPacket is not blocked if the packet does not opt-in to callbacks
 	if err != nil {
 		return ack
@@ -199,7 +216,10 @@ func (im IBCMiddleware) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet
 
 	// callback execution errors are not allowed to block the packet lifecycle, they are only used in event emissions
 	err = im.processCallback(ctx, types.CallbackTypeReceivePacket, callbackData, callbackExecutor)
-	types.EmitCallbackEvent(ctx, packet.GetDestPort(), packet.GetDestChannel(), packet.GetSequence(), types.CallbackTypeReceivePacket, callbackData, err)
+	types.EmitCallbackEvent(
+		ctx, packet.GetDestPort(), packet.GetDestChannel(), packet.GetSequence(),
+		types.CallbackTypeReceivePacket, callbackData, err,
+	)
 
 	return ack
 }
@@ -220,7 +240,9 @@ func (im IBCMiddleware) WriteAcknowledgement(
 		return err
 	}
 
-	callbackData, err := types.GetDestCallbackData(im.app, packet.GetData(), packet.GetSourcePort(), ctx.GasMeter().GasRemaining(), im.maxCallbackGas)
+	callbackData, err := types.GetDestCallbackData(
+		im.app, packet.GetData(), packet.GetSourcePort(), ctx.GasMeter().GasRemaining(), im.maxCallbackGas,
+	)
 	// WriteAcknowledgement is not blocked if the packet does not opt-in to callbacks
 	if err != nil {
 		return nil
@@ -232,12 +254,20 @@ func (im IBCMiddleware) WriteAcknowledgement(
 
 	// callback execution errors are not allowed to block the packet lifecycle, they are only used in event emissions
 	err = im.processCallback(ctx, types.CallbackTypeReceivePacket, callbackData, callbackExecutor)
-	types.EmitCallbackEvent(ctx, packet.GetDestPort(), packet.GetDestChannel(), packet.GetSequence(), types.CallbackTypeReceivePacket, callbackData, err)
+	types.EmitCallbackEvent(
+		ctx, packet.GetDestPort(), packet.GetDestChannel(), packet.GetSequence(),
+		types.CallbackTypeReceivePacket, callbackData, err,
+	)
 
 	return nil
 }
 
 // processCallback executes the callbackExecutor and reverts contract changes if the callbackExecutor fails.
+//
+// Error Precedence and Returns:
+//   - oogErr: Takes the highest precedence. If the callback runs out of gas, an error wrapped with types.ErrCallbackOutOfGas is returned.
+//   - panicErr: Takes the second-highest precedence. If a panic occurs and it is not propagated, an error wrapped with types.ErrCallbackPanic is returned.
+//   - callbackErr: If the callbackExecutor returns an error, it is returned as-is.
 //
 // panics if
 //   - the contractExecutor panics for any reason, and the callbackType is SendPacket, or
@@ -248,7 +278,7 @@ func (IBCMiddleware) processCallback(
 	callbackData types.CallbackData, callbackExecutor func(sdk.Context) error,
 ) (err error) {
 	cachedCtx, writeFn := ctx.CacheContext()
-	cachedCtx = cachedCtx.WithGasMeter(sdk.NewGasMeter(callbackData.ExecutionGasLimit))
+	cachedCtx = cachedCtx.WithGasMeter(storetypes.NewGasMeter(callbackData.ExecutionGasLimit))
 
 	defer func() {
 		// consume the minimum of g.consumed and g.limit
@@ -259,11 +289,15 @@ func (IBCMiddleware) processCallback(
 			if callbackType == types.CallbackTypeSendPacket {
 				panic(r)
 			}
+			err = errorsmod.Wrapf(types.ErrCallbackPanic, "ibc %s callback panicked with: %v", callbackType, r)
 		}
 
 		// if the callback ran out of gas and the relayer has not reserved enough gas, then revert the state
-		if cachedCtx.GasMeter().IsPastLimit() && callbackData.AllowRetry() {
-			panic(sdk.ErrorOutOfGas{Descriptor: fmt.Sprintf("ibc %s callback out of gas; commitGasLimit: %d", callbackType, callbackData.CommitGasLimit)})
+		if cachedCtx.GasMeter().IsPastLimit() {
+			if callbackData.AllowRetry() {
+				panic(storetypes.ErrorOutOfGas{Descriptor: fmt.Sprintf("ibc %s callback out of gas; commitGasLimit: %d", callbackType, callbackData.CommitGasLimit)})
+			}
+			err = errorsmod.Wrapf(types.ErrCallbackOutOfGas, "ibc %s callback out of gas", callbackType)
 		}
 
 		// allow the transaction to be committed, continuing the packet lifecycle
@@ -328,6 +362,46 @@ func (im IBCMiddleware) OnChanCloseInit(ctx sdk.Context, portID, channelID strin
 // OnChanCloseConfirm defers to the underlying application
 func (im IBCMiddleware) OnChanCloseConfirm(ctx sdk.Context, portID, channelID string) error {
 	return im.app.OnChanCloseConfirm(ctx, portID, channelID)
+}
+
+// OnChanUpgradeInit implements the IBCModule interface
+func (im IBCMiddleware) OnChanUpgradeInit(ctx sdk.Context, portID, channelID string, proposedOrder channeltypes.Order, proposedConnectionHops []string, proposedVersion string) (string, error) {
+	cbs, ok := im.app.(porttypes.UpgradableModule)
+	if !ok {
+		return "", errorsmod.Wrap(porttypes.ErrInvalidRoute, "upgrade route not found to module in application callstack")
+	}
+
+	return cbs.OnChanUpgradeInit(ctx, portID, channelID, proposedOrder, proposedConnectionHops, proposedVersion)
+}
+
+// OnChanUpgradeTry implements the IBCModule interface
+func (im IBCMiddleware) OnChanUpgradeTry(ctx sdk.Context, portID, channelID string, proposedOrder channeltypes.Order, proposedConnectionHops []string, counterpartyVersion string) (string, error) {
+	cbs, ok := im.app.(porttypes.UpgradableModule)
+	if !ok {
+		return "", errorsmod.Wrap(porttypes.ErrInvalidRoute, "upgrade route not found to module in application callstack")
+	}
+
+	return cbs.OnChanUpgradeTry(ctx, portID, channelID, proposedOrder, proposedConnectionHops, counterpartyVersion)
+}
+
+// OnChanUpgradeAck implements the IBCModule interface
+func (im IBCMiddleware) OnChanUpgradeAck(ctx sdk.Context, portID, channelID, counterpartyVersion string) error {
+	cbs, ok := im.app.(porttypes.UpgradableModule)
+	if !ok {
+		return errorsmod.Wrap(porttypes.ErrInvalidRoute, "upgrade route not found to module in application callstack")
+	}
+
+	return cbs.OnChanUpgradeAck(ctx, portID, channelID, counterpartyVersion)
+}
+
+// OnChanUpgradeOpen implements the IBCModule interface
+func (im IBCMiddleware) OnChanUpgradeOpen(ctx sdk.Context, portID, channelID string, proposedOrder channeltypes.Order, proposedConnectionHops []string, proposedVersion string) {
+	cbs, ok := im.app.(porttypes.UpgradableModule)
+	if !ok {
+		panic(errorsmod.Wrap(porttypes.ErrInvalidRoute, "upgrade route not found to module in application callstack"))
+	}
+
+	cbs.OnChanUpgradeOpen(ctx, portID, channelID, proposedOrder, proposedConnectionHops, proposedVersion)
 }
 
 // GetAppVersion implements the ICS4Wrapper interface. Callbacks has no version,

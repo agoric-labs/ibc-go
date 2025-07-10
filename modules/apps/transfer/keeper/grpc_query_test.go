@@ -3,12 +3,13 @@ package keeper_test
 import (
 	"fmt"
 
-	"cosmossdk.io/math"
+	sdkmath "cosmossdk.io/math"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/query"
 
-	"github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
-	ibctesting "github.com/cosmos/ibc-go/v7/testing"
+	"github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
+	ibctesting "github.com/cosmos/ibc-go/v8/testing"
 )
 
 func (suite *KeeperTestSuite) TestQueryDenomTrace() {
@@ -72,12 +73,13 @@ func (suite *KeeperTestSuite) TestQueryDenomTrace() {
 
 	for _, tc := range testCases {
 		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
+			tc := tc
 			suite.SetupTest() // reset
 
 			tc.malleate()
-			ctx := sdk.WrapSDKContext(suite.chainA.GetContext())
+			ctx := suite.chainA.GetContext()
 
-			res, err := suite.queryClient.DenomTrace(ctx, req)
+			res, err := suite.chainA.GetSimApp().TransferKeeper.DenomTrace(ctx, req)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -131,13 +133,14 @@ func (suite *KeeperTestSuite) TestQueryDenomTraces() {
 	}
 
 	for _, tc := range testCases {
-		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
+		tc := tc
+		suite.Run(tc.msg, func() {
 			suite.SetupTest() // reset
 
 			tc.malleate()
-			ctx := sdk.WrapSDKContext(suite.chainA.GetContext())
+			ctx := suite.chainA.GetContext()
 
-			res, err := suite.queryClient.DenomTraces(ctx, req)
+			res, err := suite.chainA.GetSimApp().TransferKeeper.DenomTraces(ctx, req)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -151,9 +154,9 @@ func (suite *KeeperTestSuite) TestQueryDenomTraces() {
 }
 
 func (suite *KeeperTestSuite) TestQueryParams() {
-	ctx := sdk.WrapSDKContext(suite.chainA.GetContext())
+	ctx := suite.chainA.GetContext()
 	expParams := types.DefaultParams()
-	res, _ := suite.queryClient.Params(ctx, &types.QueryParamsRequest{})
+	res, _ := suite.chainA.GetSimApp().TransferKeeper.Params(ctx, &types.QueryParamsRequest{})
 	suite.Require().Equal(&expParams, res.Params)
 }
 
@@ -199,7 +202,8 @@ func (suite *KeeperTestSuite) TestQueryDenomHash() {
 	}
 
 	for _, tc := range testCases {
-		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
+		tc := tc
+		suite.Run(tc.msg, func() {
 			suite.SetupTest() // reset
 
 			req = &types.QueryDenomHashRequest{
@@ -208,9 +212,9 @@ func (suite *KeeperTestSuite) TestQueryDenomHash() {
 			suite.chainA.GetSimApp().TransferKeeper.SetDenomTrace(suite.chainA.GetContext(), reqTrace)
 
 			tc.malleate()
-			ctx := sdk.WrapSDKContext(suite.chainA.GetContext())
+			ctx := suite.chainA.GetContext()
 
-			res, err := suite.queryClient.DenomHash(ctx, req)
+			res, err := suite.chainA.GetSimApp().TransferKeeper.DenomHash(ctx, req)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -244,13 +248,14 @@ func (suite *KeeperTestSuite) TestEscrowAddress() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
 			suite.SetupTest() // reset
 
 			tc.malleate()
-			ctx := sdk.WrapSDKContext(suite.chainA.GetContext())
+			ctx := suite.chainA.GetContext()
 
-			res, err := suite.queryClient.EscrowAddress(ctx, req)
+			res, err := suite.chainA.GetSimApp().TransferKeeper.EscrowAddress(ctx, req)
 
 			if tc.expPass {
 				suite.Require().NoError(err)
@@ -266,7 +271,7 @@ func (suite *KeeperTestSuite) TestEscrowAddress() {
 func (suite *KeeperTestSuite) TestTotalEscrowForDenom() {
 	var (
 		req             *types.QueryTotalEscrowForDenomRequest
-		expEscrowAmount math.Int
+		expEscrowAmount sdkmath.Int
 	)
 
 	testCases := []struct {
@@ -281,7 +286,7 @@ func (suite *KeeperTestSuite) TestTotalEscrowForDenom() {
 					Denom: sdk.DefaultBondDenom,
 				}
 
-				expEscrowAmount = math.NewInt(100)
+				expEscrowAmount = sdkmath.NewInt(100)
 				suite.chainA.GetSimApp().TransferKeeper.SetTotalEscrowForDenom(suite.chainA.GetContext(), sdk.NewCoin(sdk.DefaultBondDenom, expEscrowAmount))
 			},
 			true,
@@ -295,7 +300,7 @@ func (suite *KeeperTestSuite) TestTotalEscrowForDenom() {
 				}
 
 				suite.chainA.GetSimApp().TransferKeeper.SetDenomTrace(suite.chainA.GetContext(), denomTrace)
-				expEscrowAmount, ok := math.NewIntFromString("100000000000000000000")
+				expEscrowAmount, ok := sdkmath.NewIntFromString("100000000000000000000")
 				suite.Require().True(ok)
 				suite.chainA.GetSimApp().TransferKeeper.SetTotalEscrowForDenom(suite.chainA.GetContext(), sdk.NewCoin(sdk.DefaultBondDenom, expEscrowAmount))
 
@@ -340,12 +345,13 @@ func (suite *KeeperTestSuite) TestTotalEscrowForDenom() {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
 			suite.SetupTest() // reset
 
-			expEscrowAmount = sdk.ZeroInt()
+			expEscrowAmount = sdkmath.ZeroInt()
 			tc.malleate()
-			ctx := sdk.WrapSDKContext(suite.chainA.GetContext())
+			ctx := suite.chainA.GetContext()
 
 			res, err := suite.chainA.GetSimApp().TransferKeeper.TotalEscrowForDenom(ctx, req)
 

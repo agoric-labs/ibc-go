@@ -3,15 +3,16 @@ package ibccallbacks_test
 import (
 	"fmt"
 
+	sdkmath "cosmossdk.io/math"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	"github.com/cosmos/ibc-go/modules/apps/callbacks/testing/simapp"
 	"github.com/cosmos/ibc-go/modules/apps/callbacks/types"
-	transfertypes "github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
-	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
-	ibctesting "github.com/cosmos/ibc-go/v7/testing"
+	transfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
+	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
+	ibctesting "github.com/cosmos/ibc-go/v8/testing"
 )
-
-var callbackAddr = ibctesting.TestAccAddress
 
 func (s *CallbacksTestSuite) TestTransferCallbacks() {
 	testCases := []struct {
@@ -28,19 +29,19 @@ func (s *CallbacksTestSuite) TestTransferCallbacks() {
 		},
 		{
 			"success: dest callback",
-			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, callbackAddr),
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, simapp.SuccessContract),
 			types.CallbackTypeReceivePacket,
 			true,
 		},
 		{
 			"success: dest callback with other json fields",
-			fmt.Sprintf(`{"dest_callback": {"address": "%s"}, "something_else": {}}`, callbackAddr),
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}, "something_else": {}}`, simapp.SuccessContract),
 			types.CallbackTypeReceivePacket,
 			true,
 		},
 		{
 			"success: dest callback with malformed json",
-			fmt.Sprintf(`{"dest_callback": {"address": "%s"}, malformed}`, callbackAddr),
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}, malformed}`, simapp.SuccessContract),
 			"none",
 			true,
 		},
@@ -52,19 +53,19 @@ func (s *CallbacksTestSuite) TestTransferCallbacks() {
 		},
 		{
 			"success: source callback",
-			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.SuccessContract),
 			types.CallbackTypeAcknowledgementPacket,
 			true,
 		},
 		{
 			"success: source callback with other json fields",
-			fmt.Sprintf(`{"src_callback": {"address": "%s"}, "something_else": {}}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}, "something_else": {}}`, simapp.SuccessContract),
 			types.CallbackTypeAcknowledgementPacket,
 			true,
 		},
 		{
 			"success: source callback with malformed json",
-			fmt.Sprintf(`{"src_callback": {"address": "%s"}, malformed}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}, malformed}`, simapp.SuccessContract),
 			"none",
 			true,
 		},
@@ -76,23 +77,38 @@ func (s *CallbacksTestSuite) TestTransferCallbacks() {
 		},
 		{
 			"failure: dest callback with low gas (panic)",
-			fmt.Sprintf(`{"dest_callback": {"address": "%s", "gas_limit": "450000"}}`, callbackAddr),
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, simapp.OogPanicContract),
 			types.CallbackTypeReceivePacket,
 			false,
 		},
 		{
 			"failure: source callback with low gas (panic)",
-			fmt.Sprintf(`{"src_callback": {"address": "%s", "gas_limit": "450000"}}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.OogPanicContract),
+			types.CallbackTypeSendPacket,
+			false,
+		},
+		{
+			"failure: dest callback with low gas (error)",
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, simapp.OogErrorContract),
+			types.CallbackTypeReceivePacket,
+			false,
+		},
+		{
+			"failure: source callback with low gas (error)",
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.OogErrorContract),
 			types.CallbackTypeSendPacket,
 			false,
 		},
 	}
 
 	for _, tc := range testCases {
-		s.SetupTransferTest()
+		tc := tc
+		s.Run(tc.name, func() {
+			s.SetupTransferTest()
 
-		s.ExecuteTransfer(tc.transferMemo)
-		s.AssertHasExecutedExpectedCallback(tc.expCallback, tc.expSuccess)
+			s.ExecuteTransfer(tc.transferMemo)
+			s.AssertHasExecutedExpectedCallback(tc.expCallback, tc.expSuccess)
+		})
 	}
 }
 
@@ -111,35 +127,51 @@ func (s *CallbacksTestSuite) TestTransferTimeoutCallbacks() {
 		},
 		{
 			"success: dest callback",
-			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, callbackAddr),
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, simapp.SuccessContract),
 			"none", // timeouts don't reach destination chain execution
 			true,
 		},
 		{
 			"success: source callback",
-			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.SuccessContract),
 			types.CallbackTypeTimeoutPacket,
 			true,
 		},
 		{
 			"success: dest callback with low gas (panic)",
-			fmt.Sprintf(`{"dest_callback": {"address": "%s", "gas_limit": "450000"}}`, callbackAddr),
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, simapp.OogPanicContract),
+			"none", // timeouts don't reach destination chain execution
+			true,
+		},
+		{
+			"success: dest callback with low gas (error)",
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, simapp.OogErrorContract),
 			"none", // timeouts don't reach destination chain execution
 			true,
 		},
 		{
 			"failure: source callback with low gas (panic)",
-			fmt.Sprintf(`{"src_callback": {"address": "%s", "gas_limit": "450000"}}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.OogPanicContract),
+			types.CallbackTypeSendPacket,
+			false,
+		},
+		{
+			"failure: source callback with low gas (error)",
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.OogErrorContract),
 			types.CallbackTypeSendPacket,
 			false,
 		},
 	}
 
 	for _, tc := range testCases {
-		s.SetupTransferTest()
+		tc := tc
+		s.Run(tc.name, func() {
+			s.SetupTransferTest()
 
-		s.ExecuteTransferTimeout(tc.transferMemo)
-		s.AssertHasExecutedExpectedCallback(tc.expCallback, tc.expSuccess)
+			s.ExecuteTransferTimeout(tc.transferMemo)
+			s.AssertHasExecutedExpectedCallback(tc.expCallback, tc.expSuccess)
+		})
+
 	}
 }
 
@@ -178,7 +210,7 @@ func (s *CallbacksTestSuite) ExecuteTransfer(memo string) {
 	// check that the escrow address balance increased by 100
 	s.Require().Equal(escrowBalance.Add(amount), GetSimApp(s.chainA).BankKeeper.GetBalance(s.chainA.GetContext(), escrowAddress, sdk.DefaultBondDenom))
 	// check that the receiving address balance increased by 100
-	s.Require().Equal(receiverBalance.AddAmount(sdk.NewInt(100)), GetSimApp(s.chainB).BankKeeper.GetBalance(s.chainB.GetContext(), s.chainB.SenderAccount.GetAddress(), voucherDenomTrace.IBCDenom()))
+	s.Require().Equal(receiverBalance.AddAmount(sdkmath.NewInt(100)), GetSimApp(s.chainB).BankKeeper.GetBalance(s.chainB.GetContext(), s.chainB.SenderAccount.GetAddress(), voucherDenomTrace.IBCDenom()))
 }
 
 // ExecuteTransferTimeout executes a transfer message on chainA for 100 denom.
