@@ -3,11 +3,12 @@ package mock_test
 import (
 	"testing"
 
-	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
-	tmtypes "github.com/cometbft/cometbft/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc-go/v7/testing/mock"
+	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	tmtypes "github.com/cometbft/cometbft/types"
+
+	"github.com/cosmos/ibc-go/v8/testing/mock"
 )
 
 const chainID = "testChain"

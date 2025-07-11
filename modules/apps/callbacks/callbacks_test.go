@@ -2,29 +2,32 @@ package ibccallbacks_test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 
+	dbm "github.com/cosmos/cosmos-db"
 	"github.com/stretchr/testify/suite"
 
+	"cosmossdk.io/log"
 	sdkmath "cosmossdk.io/math"
 
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 
-	dbm "github.com/cometbft/cometbft-db"
-	"github.com/cometbft/cometbft/libs/log"
+	abci "github.com/cometbft/cometbft/abci/types"
 
 	simapp "github.com/cosmos/ibc-go/modules/apps/callbacks/testing/simapp"
 	"github.com/cosmos/ibc-go/modules/apps/callbacks/types"
-	icacontrollertypes "github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/controller/types"
-	icatypes "github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/types"
-	feetypes "github.com/cosmos/ibc-go/v7/modules/apps/29-fee/types"
-	transfertypes "github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
-	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
-	ibctesting "github.com/cosmos/ibc-go/v7/testing"
-	ibcmock "github.com/cosmos/ibc-go/v7/testing/mock"
+	icacontrollertypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller/types"
+	icatypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/types"
+	feetypes "github.com/cosmos/ibc-go/v8/modules/apps/29-fee/types"
+	transfertypes "github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
+	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
+	porttypes "github.com/cosmos/ibc-go/v8/modules/core/05-port/types"
+	ibctesting "github.com/cosmos/ibc-go/v8/testing"
+	ibcmock "github.com/cosmos/ibc-go/v8/testing/mock"
 )
 
 const maxCallbackGas = uint64(1000000)
@@ -36,9 +39,8 @@ func init() {
 // SetupTestingApp provides the duplicated simapp which is specific to the callbacks module on chain creation.
 func SetupTestingApp() (ibctesting.TestingApp, map[string]json.RawMessage) {
 	db := dbm.NewMemDB()
-	encCdc := simapp.MakeTestEncodingConfig()
 	app := simapp.NewSimApp(log.NewNopLogger(), db, nil, true, simtestutil.EmptyAppOptions{})
-	return app, simapp.NewDefaultGenesisState(encCdc.Codec)
+	return app, app.DefaultGenesis()
 }
 
 // GetSimApp returns the duplicated SimApp from within the callbacks directory.
@@ -46,7 +48,7 @@ func SetupTestingApp() (ibctesting.TestingApp, map[string]json.RawMessage) {
 func GetSimApp(chain *ibctesting.TestChain) *simapp.SimApp {
 	app, ok := chain.App.(*simapp.SimApp)
 	if !ok {
-		panic("chain is not a simapp.SimApp")
+		panic(errors.New("chain is not a simapp.SimApp"))
 	}
 	return app
 }
@@ -69,10 +71,6 @@ func (s *CallbacksTestSuite) setupChains() {
 	s.chainA = s.coordinator.GetChain(ibctesting.GetChainID(1))
 	s.chainB = s.coordinator.GetChain(ibctesting.GetChainID(2))
 	s.path = ibctesting.NewPath(s.chainA, s.chainB)
-
-	// override the SendMsgs function to not require a successful transaction
-	overrideSendMsg(s.chainA)
-	overrideSendMsg(s.chainB)
 }
 
 // SetupTransferTest sets up a transfer channel between chainA and chainB
@@ -162,7 +160,7 @@ func (s *CallbacksTestSuite) RegisterInterchainAccount(owner string) {
 	s.Require().NotEmpty(res)
 	s.Require().NoError(err)
 
-	channelID, err := ibctesting.ParseChannelIDFromEvents(res.GetEvents())
+	channelID, err := ibctesting.ParseChannelIDFromEvents(res.Events)
 	s.Require().NoError(err)
 
 	s.path.EndpointA.ChannelID = channelID
@@ -267,8 +265,9 @@ func (s *CallbacksTestSuite) AssertHasExecutedExpectedCallbackWithFee(
 			sdk.NewCoins(GetSimApp(s.chainA).BankKeeper.GetBalance(s.chainA.GetContext(), s.chainB.SenderAccount.GetAddress(), ibctesting.TestCoin.Denom)),
 		)
 
+		refundCoins := fee.Total().Sub(fee.RecvFee...).Sub(fee.AckFee...)
 		s.Require().Equal(
-			fee.AckFee.Add(fee.TimeoutFee...), // ack fee paid, timeout fee refunded
+			fee.AckFee.Add(refundCoins...), // ack fee paid, and refund processed
 			sdk.NewCoins(
 				GetSimApp(s.chainA).BankKeeper.GetBalance(
 					s.chainA.GetContext(), s.chainA.SenderAccount.GetAddress(),
@@ -295,37 +294,25 @@ func (s *CallbacksTestSuite) AssertHasExecutedExpectedCallbackWithFee(
 	s.AssertHasExecutedExpectedCallback(callbackType, isSuccessful)
 }
 
-// overrideSendMsg overrides both chains' SendMsgs function to a version that doesn't require
-// that the transaction is successful.
-func overrideSendMsg(chain *ibctesting.TestChain) {
-	chain.SendMsgsOverride = func(msgs ...sdk.Msg) (*sdk.Result, error) {
-		// ensure the chain has the latest time
-		chain.Coordinator.UpdateTimeForChain(chain)
-
-		_, r, err := simapp.SignAndDeliver(
-			chain.TxConfig,
-			chain.App.GetBaseApp(),
-			msgs,
-			chain.ChainID,
-			[]uint64{chain.SenderAccount.GetAccountNumber()},
-			[]uint64{chain.SenderAccount.GetSequence()},
-			chain.SenderPrivKey,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		// NextBlock calls app.Commit()
-		chain.NextBlock()
-
-		// increment sequence for successful transaction execution
-		err = chain.SenderAccount.SetSequence(chain.SenderAccount.GetSequence() + 1)
-		if err != nil {
-			return nil, err
-		}
-
-		chain.Coordinator.IncrementTime()
-
-		return r, nil
+// GetExpectedEvent returns the expected event for a callback.
+func GetExpectedEvent(
+	packetDataUnmarshaler porttypes.PacketDataUnmarshaler, remainingGas uint64, data []byte, srcPortID,
+	eventPortID, eventChannelID string, seq uint64, callbackType types.CallbackType, expError error,
+) (abci.Event, bool) {
+	var (
+		callbackData types.CallbackData
+		err          error
+	)
+	if callbackType == types.CallbackTypeReceivePacket {
+		callbackData, err = types.GetDestCallbackData(packetDataUnmarshaler, data, srcPortID, remainingGas, maxCallbackGas)
+	} else {
+		callbackData, err = types.GetSourceCallbackData(packetDataUnmarshaler, data, srcPortID, remainingGas, maxCallbackGas)
 	}
+	if err != nil {
+		return abci.Event{}, false
+	}
+
+	newCtx := sdk.Context{}.WithEventManager(sdk.NewEventManager())
+	types.EmitCallbackEvent(newCtx, eventPortID, eventChannelID, seq, callbackType, callbackData, expError)
+	return newCtx.EventManager().Events().ToABCIEvents()[0], true
 }

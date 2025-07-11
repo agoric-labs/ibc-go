@@ -1,8 +1,7 @@
 go 1.23
 
-toolchain go1.23.6
-
 use (
-	.
+	./
+	./modules/capability
 	./modules/apps/callbacks
 )

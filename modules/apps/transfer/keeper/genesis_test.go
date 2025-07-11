@@ -3,10 +3,11 @@ package keeper_test
 import (
 	"fmt"
 
-	"cosmossdk.io/math"
+	sdkmath "cosmossdk.io/math"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
+	"github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
 )
 
 func (suite *KeeperTestSuite) TestGenesis() {
@@ -15,7 +16,7 @@ func (suite *KeeperTestSuite) TestGenesis() {
 	}
 
 	var (
-		traces                types.Traces
+		denomTraces           types.Traces
 		escrows               sdk.Coins
 		pathsAndEscrowAmounts = []struct {
 			path   string
@@ -34,11 +35,11 @@ func (suite *KeeperTestSuite) TestGenesis() {
 			BaseDenom: "uatom",
 			Path:      pathAndEscrowAmount.path,
 		}
-		traces = append(types.Traces{denomTrace}, traces...)
+		denomTraces = append(types.Traces{denomTrace}, denomTraces...)
 		suite.chainA.GetSimApp().TransferKeeper.SetDenomTrace(suite.chainA.GetContext(), denomTrace)
 
 		denom := denomTrace.IBCDenom()
-		amount, ok := math.NewIntFromString(pathAndEscrowAmount.escrow)
+		amount, ok := sdkmath.NewIntFromString(pathAndEscrowAmount.escrow)
 		suite.Require().True(ok)
 		escrows = append(sdk.NewCoins(sdk.NewCoin(denom, amount)), escrows...)
 		suite.chainA.GetSimApp().TransferKeeper.SetTotalEscrowForDenom(suite.chainA.GetContext(), sdk.NewCoin(denom, amount))
@@ -47,10 +48,15 @@ func (suite *KeeperTestSuite) TestGenesis() {
 	genesis := suite.chainA.GetSimApp().TransferKeeper.ExportGenesis(suite.chainA.GetContext())
 
 	suite.Require().Equal(types.PortID, genesis.PortId)
-	suite.Require().Equal(traces.Sort(), genesis.DenomTraces)
+	suite.Require().Equal(denomTraces.Sort(), genesis.DenomTraces)
 	suite.Require().Equal(escrows.Sort(), genesis.TotalEscrowed)
 
 	suite.Require().NotPanics(func() {
 		suite.chainA.GetSimApp().TransferKeeper.InitGenesis(suite.chainA.GetContext(), *genesis)
 	})
+
+	for _, denomTrace := range denomTraces {
+		_, found := suite.chainA.GetSimApp().BankKeeper.GetDenomMetaData(suite.chainA.GetContext(), denomTrace.IBCDenom())
+		suite.Require().True(found)
+	}
 }

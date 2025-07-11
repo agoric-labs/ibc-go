@@ -1,11 +1,13 @@
 package keeper_test
 
 import (
-	"cosmossdk.io/math"
+	sdkmath "cosmossdk.io/math"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/ibc-go/v7/modules/apps/transfer/keeper"
-	"github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
+
+	"github.com/cosmos/ibc-go/v8/modules/apps/transfer/keeper"
+	"github.com/cosmos/ibc-go/v8/modules/apps/transfer/types"
+	ibctesting "github.com/cosmos/ibc-go/v8/testing"
 )
 
 func (suite *KeeperTestSuite) TestTotalEscrowPerDenomInvariant() {
@@ -23,7 +25,7 @@ func (suite *KeeperTestSuite) TestTotalEscrowPerDenomInvariant() {
 			"fails with broken invariant",
 			func() {
 				// set amount for denom higher than actual value in escrow
-				amount := math.NewInt(200)
+				amount := sdkmath.NewInt(200)
 				suite.chainA.GetSimApp().TransferKeeper.SetTotalEscrowForDenom(suite.chainA.GetContext(), sdk.NewCoin(sdk.DefaultBondDenom, amount))
 			},
 			false,
@@ -35,10 +37,10 @@ func (suite *KeeperTestSuite) TestTotalEscrowPerDenomInvariant() {
 
 		suite.Run(tc.name, func() {
 			suite.SetupTest() // reset
-			path := NewTransferPath(suite.chainA, suite.chainB)
+			path := ibctesting.NewTransferPath(suite.chainA, suite.chainB)
 			suite.coordinator.Setup(path)
 
-			amount := math.NewInt(100)
+			amount := sdkmath.NewInt(100)
 
 			// send coins from chain A to chain B so that we have them in escrow
 			coin := sdk.NewCoin(sdk.DefaultBondDenom, amount)

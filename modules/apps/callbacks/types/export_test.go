@@ -1,7 +1,7 @@
 package types
 
 import (
-	porttypes "github.com/cosmos/ibc-go/v7/modules/core/05-port/types"
+	porttypes "github.com/cosmos/ibc-go/v8/modules/core/05-port/types"
 )
 
 /*
@@ -11,10 +11,10 @@ import (
 // GetCallbackData is a wrapper around getCallbackData to allow the function to be directly called in tests.
 func GetCallbackData(
 	packetDataUnmarshaler porttypes.PacketDataUnmarshaler,
-	data []byte, srcPortID string, remainingGas,
+	packetData []byte, srcPortID string, remainingGas,
 	maxGas uint64, callbackKey string,
 ) (CallbackData, error) {
-	return getCallbackData(packetDataUnmarshaler, data, srcPortID, remainingGas, maxGas, callbackKey)
+	return getCallbackData(packetDataUnmarshaler, packetData, srcPortID, remainingGas, maxGas, callbackKey)
 }
 
 // GetCallbackAddress is a wrapper around getCallbackAddress to allow the function to be directly called in tests.

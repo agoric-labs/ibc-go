@@ -4,20 +4,24 @@ import (
 	"encoding/json"
 	"fmt"
 
-	abci "github.com/cometbft/cometbft/abci/types"
+	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/spf13/cobra"
+
+	"cosmossdk.io/core/appmodule"
+
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
-	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
-	"github.com/grpc-ecosystem/grpc-gateway/runtime"
-	"github.com/spf13/cobra"
 
-	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
-	porttypes "github.com/cosmos/ibc-go/v7/modules/core/05-port/types"
-	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
-	"github.com/cosmos/ibc-go/v7/modules/core/exported"
+	abci "github.com/cometbft/cometbft/abci/types"
+
+	capabilitytypes "github.com/cosmos/ibc-go/modules/capability/types"
+	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
+	porttypes "github.com/cosmos/ibc-go/v8/modules/core/05-port/types"
+	host "github.com/cosmos/ibc-go/v8/modules/core/24-host"
+	"github.com/cosmos/ibc-go/v8/modules/core/exported"
 )
 
 const (
@@ -25,7 +29,8 @@ const (
 
 	MemStoreKey = "memory:mock"
 
-	PortID  = ModuleName
+	PortID = ModuleName
+
 	Version = "mock-version"
 )
 
@@ -38,12 +43,23 @@ var (
 	MockRecvCanaryCapabilityName    = "mock receive canary capability name"
 	MockAckCanaryCapabilityName     = "mock acknowledgement canary capability name"
 	MockTimeoutCanaryCapabilityName = "mock timeout canary capability name"
+	UpgradeVersion                  = fmt.Sprintf("%s-v2", Version)
 	// MockApplicationCallbackError should be returned when an application callback should fail. It is possible to
 	// test that this error was returned using ErrorIs.
 	MockApplicationCallbackError error = &applicationCallbackError{}
 )
 
-var _ porttypes.IBCModule = (*IBCModule)(nil)
+var (
+	TestKey   = []byte("test-key")
+	TestValue = []byte("test-value")
+)
+
+var (
+	_ module.AppModuleBasic = (*AppModuleBasic)(nil)
+	_ appmodule.AppModule   = (*AppModule)(nil)
+
+	_ porttypes.IBCModule = (*IBCModule)(nil)
+)
 
 // Expected Interface
 // PortKeeper defines the expected IBC port keeper
@@ -59,6 +75,12 @@ type AppModuleBasic struct{}
 func (AppModuleBasic) Name() string {
 	return ModuleName
 }
+
+// IsOnePerModuleType implements the depinject.OnePerModuleType interface.
+func (AppModule) IsOnePerModuleType() {}
+
+// IsAppModule implements the appmodule.AppModule interface.
+func (AppModule) IsAppModule() {}
 
 // RegisterLegacyAminoCodec implements AppModuleBasic interface.
 func (AppModuleBasic) RegisterLegacyAminoCodec(*codec.LegacyAmino) {}
@@ -77,7 +99,7 @@ func (AppModuleBasic) ValidateGenesis(codec.JSONCodec, client.TxEncodingConfig, 
 }
 
 // RegisterGRPCGatewayRoutes implements AppModuleBasic interface.
-func (a AppModuleBasic) RegisterGRPCGatewayRoutes(_ client.Context, _ *runtime.ServeMux) {}
+func (AppModuleBasic) RegisterGRPCGatewayRoutes(_ client.Context, _ *runtime.ServeMux) {}
 
 // GetTxCmd implements AppModuleBasic interface.
 func (AppModuleBasic) GetTxCmd() *cobra.Command {
@@ -107,15 +129,15 @@ func NewAppModule(pk PortKeeper) AppModule {
 func (AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {}
 
 // RegisterServices implements the AppModule interface.
-func (am AppModule) RegisterServices(module.Configurator) {}
+func (AppModule) RegisterServices(module.Configurator) {}
 
 // InitGenesis implements the AppModule interface.
 func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) []abci.ValidatorUpdate {
 	for _, ibcApp := range am.ibcApps {
 		if ibcApp.PortID != "" && !am.portKeeper.IsBound(ctx, ibcApp.PortID) {
 			// bind mock portID
-			cap := am.portKeeper.BindPort(ctx, ibcApp.PortID)
-			err := ibcApp.ScopedKeeper.ClaimCapability(ctx, cap, host.PortPath(ibcApp.PortID))
+			capability := am.portKeeper.BindPort(ctx, ibcApp.PortID)
+			err := ibcApp.ScopedKeeper.ClaimCapability(ctx, capability, host.PortPath(ibcApp.PortID))
 			if err != nil {
 				panic(err)
 			}
@@ -126,21 +148,12 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 }
 
 // ExportGenesis implements the AppModule interface.
-func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
+func (AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
 	return nil
 }
 
 // ConsensusVersion implements AppModule/ConsensusVersion.
 func (AppModule) ConsensusVersion() uint64 { return 1 }
-
-// BeginBlock implements the AppModule interface
-func (am AppModule) BeginBlock(ctx sdk.Context, req abci.RequestBeginBlock) {
-}
-
-// EndBlock implements the AppModule interface
-func (am AppModule) EndBlock(ctx sdk.Context, req abci.RequestEndBlock) []abci.ValidatorUpdate {
-	return []abci.ValidatorUpdate{}
-}
 
 var _ exported.Path = KeyPath{}
 

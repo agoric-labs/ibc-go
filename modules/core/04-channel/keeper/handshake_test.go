@@ -3,14 +3,14 @@ package keeper_test
 import (
 	"fmt"
 
-	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
-
-	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
-	connectiontypes "github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
-	"github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
-	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
-	"github.com/cosmos/ibc-go/v7/modules/core/exported"
-	ibctesting "github.com/cosmos/ibc-go/v7/testing"
+	capabilitytypes "github.com/cosmos/ibc-go/modules/capability/types"
+	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
+	connectiontypes "github.com/cosmos/ibc-go/v8/modules/core/03-connection/types"
+	"github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
+	host "github.com/cosmos/ibc-go/v8/modules/core/24-host"
+	"github.com/cosmos/ibc-go/v8/modules/core/exported"
+	ibctesting "github.com/cosmos/ibc-go/v8/testing"
+	"github.com/cosmos/ibc-go/v8/testing/mock"
 )
 
 type testCase = struct {
@@ -119,7 +119,7 @@ func (suite *KeeperTestSuite) TestChanOpenInit() {
 
 				counterparty := types.NewCounterparty(ibctesting.MockPort, ibctesting.FirstChannelID)
 
-				channelID, cap, err := suite.chainA.App.GetIBCKeeper().ChannelKeeper.ChanOpenInit(
+				channelID, capability, err := suite.chainA.App.GetIBCKeeper().ChannelKeeper.ChanOpenInit(
 					suite.chainA.GetContext(), path.EndpointA.ChannelConfig.Order, []string{path.EndpointA.ConnectionID},
 					path.EndpointA.ChannelConfig.PortID, portCap, counterparty, path.EndpointA.ChannelConfig.Version,
 				)
@@ -136,7 +136,7 @@ func (suite *KeeperTestSuite) TestChanOpenInit() {
 				// asserting the channel handshake initiation succeeded
 				if tc.expPass && orderSupported {
 					suite.Require().NoError(err)
-					suite.Require().NotNil(cap)
+					suite.Require().NotNil(capability)
 					suite.Require().Equal(types.FormatChannelIdentifier(0), channelID)
 
 					chanCap, ok := suite.chainA.App.GetScopedIBCKeeper().GetCapability(
@@ -144,11 +144,11 @@ func (suite *KeeperTestSuite) TestChanOpenInit() {
 						host.ChannelCapabilityPath(path.EndpointA.ChannelConfig.PortID, channelID),
 					)
 					suite.Require().True(ok, "could not retrieve channel capability after successful ChanOpenInit")
-					suite.Require().Equal(chanCap.String(), cap.String(), "channel capability is not correct")
+					suite.Require().Equal(chanCap.String(), capability.String(), "channel capability is not correct")
 				} else {
 					suite.Require().Error(err)
 					suite.Require().Contains(err.Error(), expErrorMsgSubstring)
-					suite.Require().Nil(cap)
+					suite.Require().Nil(capability)
 					suite.Require().Equal("", channelID)
 				}
 			}
@@ -278,7 +278,7 @@ func (suite *KeeperTestSuite) TestChanOpenTry() {
 			channelKey := host.ChannelKey(counterparty.PortId, counterparty.ChannelId)
 			proof, proofHeight := suite.chainA.QueryProof(channelKey)
 
-			channelID, cap, err := suite.chainB.App.GetIBCKeeper().ChannelKeeper.ChanOpenTry(
+			channelID, capability, err := suite.chainB.App.GetIBCKeeper().ChannelKeeper.ChanOpenTry(
 				suite.chainB.GetContext(), types.ORDERED, []string{path.EndpointB.ConnectionID},
 				path.EndpointB.ChannelConfig.PortID, portCap, counterparty, path.EndpointA.ChannelConfig.Version,
 				proof, malleateHeight(proofHeight, heightDiff),
@@ -286,14 +286,14 @@ func (suite *KeeperTestSuite) TestChanOpenTry() {
 
 			if tc.expPass {
 				suite.Require().NoError(err)
-				suite.Require().NotNil(cap)
+				suite.Require().NotNil(capability)
 
 				chanCap, ok := suite.chainB.App.GetScopedIBCKeeper().GetCapability(
 					suite.chainB.GetContext(),
 					host.ChannelCapabilityPath(path.EndpointB.ChannelConfig.PortID, channelID),
 				)
 				suite.Require().True(ok, "could not retrieve channel capapbility after successful ChanOpenTry")
-				suite.Require().Equal(chanCap.String(), cap.String(), "channel capability is not correct")
+				suite.Require().Equal(chanCap.String(), capability.String(), "channel capability is not correct")
 			} else {
 				suite.Require().Error(err)
 			}
@@ -719,9 +719,10 @@ func (suite *KeeperTestSuite) TestChanCloseInit() {
 // bypassed on chainA by setting the channel state in the ChannelKeeper.
 func (suite *KeeperTestSuite) TestChanCloseConfirm() {
 	var (
-		path       *ibctesting.Path
-		channelCap *capabilitytypes.Capability
-		heightDiff uint64
+		path                        *ibctesting.Path
+		channelCap                  *capabilitytypes.Capability
+		heightDiff                  uint64
+		counterpartyUpgradeSequence uint64
 	)
 
 	testCases := []testCase{
@@ -795,13 +796,32 @@ func (suite *KeeperTestSuite) TestChanCloseConfirm() {
 
 			channelCap = capabilitytypes.NewCapability(3)
 		}, false},
+		{
+			"failure: invalid counterparty upgrade sequence",
+			func() {
+				suite.coordinator.Setup(path)
+				channelCap = suite.chainB.GetChannelCapability(path.EndpointB.ChannelConfig.PortID, path.EndpointB.ChannelID)
+
+				// trigger upgradeInit on B which will bump the counterparty upgrade sequence.
+				path.EndpointB.ChannelConfig.ProposedUpgrade.Fields.Version = mock.UpgradeVersion
+				err := path.EndpointB.ChanUpgradeInit()
+				suite.Require().NoError(err)
+
+				err = path.EndpointA.SetChannelState(types.CLOSED)
+				suite.Require().NoError(err)
+
+				channelCap = capabilitytypes.NewCapability(3)
+			},
+			false,
+		},
 	}
 
 	for _, tc := range testCases {
 		tc := tc
 		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
-			suite.SetupTest() // reset
-			heightDiff = 0    // must explicitly be changed
+			suite.SetupTest()               // reset
+			heightDiff = 0                  // must explicitly be changed
+			counterpartyUpgradeSequence = 0 // must explicitly be changed
 			path = ibctesting.NewPath(suite.chainA, suite.chainB)
 
 			tc.malleate()
@@ -809,9 +829,9 @@ func (suite *KeeperTestSuite) TestChanCloseConfirm() {
 			channelKey := host.ChannelKey(path.EndpointA.ChannelConfig.PortID, ibctesting.FirstChannelID)
 			proof, proofHeight := suite.chainA.QueryProof(channelKey)
 
-			err := suite.chainB.App.GetIBCKeeper().ChannelKeeper.ChanCloseConfirm(
+			err := suite.chainB.App.GetIBCKeeper().ChannelKeeper.ChanCloseConfirmWithCounterpartyUpgradeSequence(
 				suite.chainB.GetContext(), path.EndpointB.ChannelConfig.PortID, ibctesting.FirstChannelID, channelCap,
-				proof, malleateHeight(proofHeight, heightDiff),
+				proof, malleateHeight(proofHeight, heightDiff), counterpartyUpgradeSequence,
 			)
 
 			if tc.expPass {

@@ -1,26 +1,27 @@
 package ante_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
+	testifysuite "github.com/stretchr/testify/suite"
 
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
-	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
-	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
-	"github.com/cosmos/ibc-go/v7/modules/core/ante"
-	"github.com/cosmos/ibc-go/v7/modules/core/exported"
-	ibctm "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
-	ibctesting "github.com/cosmos/ibc-go/v7/testing"
+	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
+	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
+	host "github.com/cosmos/ibc-go/v8/modules/core/24-host"
+	"github.com/cosmos/ibc-go/v8/modules/core/ante"
+	"github.com/cosmos/ibc-go/v8/modules/core/exported"
+	ibctm "github.com/cosmos/ibc-go/v8/modules/light-clients/07-tendermint"
+	ibctesting "github.com/cosmos/ibc-go/v8/testing"
 )
 
 type AnteTestSuite struct {
-	suite.Suite
+	testifysuite.Suite
 
 	coordinator *ibctesting.Coordinator
 
@@ -45,7 +46,7 @@ func (suite *AnteTestSuite) SetupTest() {
 
 // TestAnteTestSuite runs all the tests within this package.
 func TestAnteTestSuite(t *testing.T) {
-	suite.Run(t, new(AnteTestSuite))
+	testifysuite.Run(t, new(AnteTestSuite))
 }
 
 // createRecvPacketMessage creates a RecvPacket message for a packet sent from chain A to chain B.
@@ -148,9 +149,9 @@ func (suite *AnteTestSuite) createTimeoutOnCloseMessage(isRedundant bool) sdk.Ms
 	proof, proofHeight := suite.chainA.QueryProof(packetKey)
 
 	channelKey := host.ChannelKey(packet.GetDestPort(), packet.GetDestChannel())
-	proofClosed, _ := suite.chainA.QueryProof(channelKey)
+	closedProof, _ := suite.chainA.QueryProof(channelKey)
 
-	return channeltypes.NewMsgTimeoutOnClose(packet, 1, proof, proofClosed, proofHeight, suite.path.EndpointA.Chain.SenderAccount.GetAddress().String())
+	return channeltypes.NewMsgTimeoutOnClose(packet, 1, proof, closedProof, proofHeight, suite.path.EndpointA.Chain.SenderAccount.GetAddress().String())
 }
 
 func (suite *AnteTestSuite) createUpdateClientMessage() sdk.Msg {
@@ -172,7 +173,7 @@ func (suite *AnteTestSuite) createUpdateClientMessage() sdk.Msg {
 		endpoint.ClientID, header,
 		endpoint.Chain.SenderAccount.GetAddress().String(),
 	)
-	require.NoError(endpoint.Chain.T, err)
+	require.NoError(endpoint.Chain.TB, err)
 
 	return msg
 }
@@ -340,8 +341,22 @@ func (suite *AnteTestSuite) TestAnteDecoratorCheckTx() {
 				}
 
 				// append non packet and update message to msgs to ensure multimsg tx should pass
-				msgs = append(msgs, &clienttypes.MsgSubmitMisbehaviour{})
+				msgs = append(msgs, &clienttypes.MsgSubmitMisbehaviour{}) //nolint:staticcheck // we're using the deprecated message for testing
 				return msgs
+			},
+			true,
+		},
+		{
+			"success on app callback error, app callbacks are skipped for performance",
+			func(suite *AnteTestSuite) []sdk.Msg {
+				suite.chainB.GetSimApp().IBCMockModule.IBCApp.OnRecvPacket = func(
+					ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress,
+				) exported.Acknowledgement {
+					panic(fmt.Errorf("failed OnRecvPacket mock callback"))
+				}
+
+				// the RecvPacket message has not been submitted to the chain yet, so it will succeed
+				return []sdk.Msg{suite.createRecvPacketMessage(false)}
 			},
 			true,
 		},
@@ -622,6 +637,20 @@ func (suite *AnteTestSuite) TestAnteDecoratorReCheckTx() {
 				msg := suite.createRecvPacketMessage(false)
 				msg.ProofCommitment = []byte("invalid-proof")
 				return []sdk.Msg{msg}
+			},
+			nil,
+		},
+		{
+			"success on app callback error, app callbacks are skipped for performance",
+			func(suite *AnteTestSuite) []sdk.Msg {
+				suite.chainB.GetSimApp().IBCMockModule.IBCApp.OnRecvPacket = func(
+					ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress,
+				) exported.Acknowledgement {
+					panic(fmt.Errorf("failed OnRecvPacket mock callback"))
+				}
+
+				// the RecvPacket message has not been submitted to the chain yet, so it will succeed
+				return []sdk.Msg{suite.createRecvPacketMessage(false)}
 			},
 			nil,
 		},

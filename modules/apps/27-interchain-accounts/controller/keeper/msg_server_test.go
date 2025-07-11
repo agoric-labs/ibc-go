@@ -3,16 +3,19 @@ package keeper_test
 import (
 	"time"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/cosmos/gogoproto/proto"
 
-	"github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/controller/keeper"
-	"github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/controller/types"
-	icatypes "github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/types"
-	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
-	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
-	ibctesting "github.com/cosmos/ibc-go/v7/testing"
+	sdkmath "cosmossdk.io/math"
+
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+
+	"github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller/keeper"
+	"github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/controller/types"
+	icatypes "github.com/cosmos/ibc-go/v8/modules/apps/27-interchain-accounts/types"
+	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
+	host "github.com/cosmos/ibc-go/v8/modules/core/24-host"
+	ibctesting "github.com/cosmos/ibc-go/v8/testing"
 )
 
 func (suite *KeeperTestSuite) TestRegisterInterchainAccount_MsgServer() {
@@ -33,13 +36,6 @@ func (suite *KeeperTestSuite) TestRegisterInterchainAccount_MsgServer() {
 			func() {},
 		},
 		{
-			"invalid connection id",
-			false,
-			func() {
-				msg.ConnectionId = "connection-100"
-			},
-		},
-		{
 			"success: ordering falls back to UNORDERED if not specified",
 			true,
 			func() {
@@ -52,6 +48,13 @@ func (suite *KeeperTestSuite) TestRegisterInterchainAccount_MsgServer() {
 			true,
 			func() {
 				msg.Owner = "<invalid-owner>"
+			},
+		},
+		{
+			"invalid connection id",
+			false,
+			func() {
+				msg.ConnectionId = "connection-100"
 			},
 		},
 		{
@@ -73,7 +76,7 @@ func (suite *KeeperTestSuite) TestRegisterInterchainAccount_MsgServer() {
 	}
 
 	for _, tc := range testCases {
-		suite.SetupTest()
+		tc := tc
 
 		suite.Run(tc.name, func() {
 			expectedOrderding = channeltypes.ORDERED
@@ -110,6 +113,7 @@ func (suite *KeeperTestSuite) TestRegisterInterchainAccount_MsgServer() {
 				suite.Require().Nil(res)
 			}
 		})
+
 	}
 }
 
@@ -185,10 +189,10 @@ func (suite *KeeperTestSuite) TestSubmitTx() {
 			icaMsg := &banktypes.MsgSend{
 				FromAddress: interchainAccountAddr,
 				ToAddress:   suite.chainB.SenderAccount.GetAddress().String(),
-				Amount:      sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(100))),
+				Amount:      sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdkmath.NewInt(100))),
 			}
 
-			data, err := icatypes.SerializeCosmosTx(suite.chainA.Codec, []proto.Message{icaMsg})
+			data, err := icatypes.SerializeCosmosTx(suite.chainA.GetSimApp().AppCodec(), []proto.Message{icaMsg}, icatypes.EncodingProtobuf)
 			suite.Require().NoError(err)
 
 			packetData := icatypes.InterchainAccountPacketData{
@@ -214,6 +218,58 @@ func (suite *KeeperTestSuite) TestSubmitTx() {
 			} else {
 				suite.Require().Error(err)
 				suite.Require().Nil(res)
+			}
+		})
+	}
+}
+
+// TestUpdateParams tests UpdateParams rpc handler
+func (suite *KeeperTestSuite) TestUpdateParams() {
+	signer := suite.chainA.GetSimApp().TransferKeeper.GetAuthority()
+	testCases := []struct {
+		name    string
+		msg     *types.MsgUpdateParams
+		expPass bool
+	}{
+		{
+			"success: valid signer and default params",
+			types.NewMsgUpdateParams(signer, types.NewParams(!types.DefaultControllerEnabled)),
+			true,
+		},
+		{
+			"failure: malformed signer address",
+			types.NewMsgUpdateParams(ibctesting.InvalidID, types.DefaultParams()),
+			false,
+		},
+		{
+			"failure: empty signer address",
+			types.NewMsgUpdateParams("", types.DefaultParams()),
+			false,
+		},
+		{
+			"failure: whitespace signer address",
+			types.NewMsgUpdateParams("    ", types.DefaultParams()),
+			false,
+		},
+		{
+			"failure: unauthorized signer address",
+			types.NewMsgUpdateParams(ibctesting.TestAccAddress, types.DefaultParams()),
+			false,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			_, err := suite.chainA.GetSimApp().ICAControllerKeeper.UpdateParams(suite.chainA.GetContext(), tc.msg)
+			if tc.expPass {
+				suite.Require().NoError(err)
+				p := suite.chainA.GetSimApp().ICAControllerKeeper.GetParams(suite.chainA.GetContext())
+				suite.Require().Equal(tc.msg.Params, p)
+			} else {
+				suite.Require().Error(err)
 			}
 		})
 	}

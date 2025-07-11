@@ -4,14 +4,13 @@ import (
 	errorsmod "cosmossdk.io/errors"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
-	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
-	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
-	"github.com/cosmos/ibc-go/v7/modules/core/exported"
-	"github.com/cosmos/ibc-go/v7/modules/core/keeper"
-	solomachine "github.com/cosmos/ibc-go/v7/modules/light-clients/06-solomachine"
-	tendermint "github.com/cosmos/ibc-go/v7/modules/light-clients/07-tendermint"
+	clienttypes "github.com/cosmos/ibc-go/v8/modules/core/02-client/types"
+	channeltypes "github.com/cosmos/ibc-go/v8/modules/core/04-channel/types"
+	"github.com/cosmos/ibc-go/v8/modules/core/exported"
+	"github.com/cosmos/ibc-go/v8/modules/core/keeper"
+	solomachine "github.com/cosmos/ibc-go/v8/modules/light-clients/06-solomachine"
+	tendermint "github.com/cosmos/ibc-go/v8/modules/light-clients/07-tendermint"
 )
 
 type RedundantRelayDecorator struct {
@@ -58,7 +57,7 @@ func (rrd RedundantRelayDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simula
 				packetMsgs++
 
 			case *channeltypes.MsgAcknowledgement:
-				response, err := rrd.k.Acknowledgement(sdk.WrapSDKContext(ctx), msg)
+				response, err := rrd.k.Acknowledgement(ctx, msg)
 				if err != nil {
 					return ctx, err
 				}
@@ -68,7 +67,7 @@ func (rrd RedundantRelayDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simula
 				packetMsgs++
 
 			case *channeltypes.MsgTimeout:
-				response, err := rrd.k.Timeout(sdk.WrapSDKContext(ctx), msg)
+				response, err := rrd.k.Timeout(ctx, msg)
 				if err != nil {
 					return ctx, err
 				}
@@ -78,7 +77,7 @@ func (rrd RedundantRelayDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simula
 				packetMsgs++
 
 			case *channeltypes.MsgTimeoutOnClose:
-				response, err := rrd.k.TimeoutOnClose(sdk.WrapSDKContext(ctx), msg)
+				response, err := rrd.k.TimeoutOnClose(ctx, msg)
 				if err != nil {
 					return ctx, err
 				}
@@ -134,7 +133,7 @@ func (rrd RedundantRelayDecorator) updateClientCheckTx(ctx sdk.Context, msg *cli
 		}
 	}
 
-	// NOTE: the following avoids panics in ante handler client updates for ibc-go v7.5.x
+	// NOTE: the following avoids panics in ante handler client updates for ibc-go v8.3.x
 	// without state machine breaking changes within light client modules.
 	switch clientMsg.(type) {
 	case *solomachine.Misbehaviour:
@@ -145,7 +144,6 @@ func (rrd RedundantRelayDecorator) updateClientCheckTx(ctx sdk.Context, msg *cli
 		heights := clientState.UpdateState(ctx, rrd.k.Codec(), clientStore, clientMsg)
 		ctx.Logger().With("module", "x/"+exported.ModuleName).Debug("ante ibc client update", "consensusHeights", heights)
 	}
-
 	return nil
 }
 
@@ -155,7 +153,7 @@ func (rrd RedundantRelayDecorator) recvPacketCheckTx(ctx sdk.Context, msg *chann
 	// grab channel capability
 	_, capability, err := rrd.k.ChannelKeeper.LookupModuleByChannel(ctx, msg.Packet.DestinationPort, msg.Packet.DestinationChannel)
 	if err != nil {
-		return nil, sdkerrors.Wrap(err, "could not retrieve module from port-id")
+		return nil, errorsmod.Wrap(err, "could not retrieve module from port-id")
 	}
 
 	// If the packet was already received, perform a no-op
@@ -169,7 +167,7 @@ func (rrd RedundantRelayDecorator) recvPacketCheckTx(ctx sdk.Context, msg *chann
 	case channeltypes.ErrNoOpMsg:
 		return &channeltypes.MsgRecvPacketResponse{Result: channeltypes.NOOP}, nil
 	default:
-		return nil, sdkerrors.Wrap(err, "receive packet verification failed")
+		return nil, errorsmod.Wrap(err, "receive packet verification failed")
 	}
 
 	return &channeltypes.MsgRecvPacketResponse{Result: channeltypes.SUCCESS}, nil
@@ -189,7 +187,7 @@ func (rrd RedundantRelayDecorator) recvPacketReCheckTx(ctx sdk.Context, msg *cha
 	case channeltypes.ErrNoOpMsg:
 		return &channeltypes.MsgRecvPacketResponse{Result: channeltypes.NOOP}, nil
 	default:
-		return nil, sdkerrors.Wrap(err, "receive packet verification failed")
+		return nil, errorsmod.Wrap(err, "receive packet verification failed")
 	}
 
 	return &channeltypes.MsgRecvPacketResponse{Result: channeltypes.SUCCESS}, nil

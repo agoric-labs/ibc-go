@@ -7,9 +7,10 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	"github.com/cosmos/ibc-go/modules/apps/callbacks/testing/simapp"
 	"github.com/cosmos/ibc-go/modules/apps/callbacks/types"
-	feetypes "github.com/cosmos/ibc-go/v7/modules/apps/29-fee/types"
-	ibctesting "github.com/cosmos/ibc-go/v7/testing"
+	feetypes "github.com/cosmos/ibc-go/v8/modules/apps/29-fee/types"
+	ibctesting "github.com/cosmos/ibc-go/v8/testing"
 )
 
 var (
@@ -33,19 +34,19 @@ func (s *CallbacksTestSuite) TestIncentivizedTransferCallbacks() {
 		},
 		{
 			"success: dest callback",
-			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, callbackAddr),
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, simapp.SuccessContract),
 			types.CallbackTypeReceivePacket,
 			true,
 		},
 		{
 			"success: dest callback with other json fields",
-			fmt.Sprintf(`{"dest_callback": {"address": "%s"}, "something_else": {}}`, callbackAddr),
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}, "something_else": {}}`, simapp.SuccessContract),
 			types.CallbackTypeReceivePacket,
 			true,
 		},
 		{
 			"success: dest callback with malformed json",
-			fmt.Sprintf(`{"dest_callback": {"address": "%s"}, malformed}`, callbackAddr),
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}, malformed}`, simapp.SuccessContract),
 			"none",
 			true,
 		},
@@ -57,19 +58,19 @@ func (s *CallbacksTestSuite) TestIncentivizedTransferCallbacks() {
 		},
 		{
 			"success: source callback",
-			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.SuccessContract),
 			types.CallbackTypeAcknowledgementPacket,
 			true,
 		},
 		{
 			"success: source callback with other json fields",
-			fmt.Sprintf(`{"src_callback": {"address": "%s"}, "something_else": {}}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}, "something_else": {}}`, simapp.SuccessContract),
 			types.CallbackTypeAcknowledgementPacket,
 			true,
 		},
 		{
 			"success: source callback with malformed json",
-			fmt.Sprintf(`{"src_callback": {"address": "%s"}, malformed}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}, malformed}`, simapp.SuccessContract),
 			"none",
 			true,
 		},
@@ -81,19 +82,33 @@ func (s *CallbacksTestSuite) TestIncentivizedTransferCallbacks() {
 		},
 		{
 			"failure: dest callback with low gas (panic)",
-			fmt.Sprintf(`{"dest_callback": {"address": "%s", "gas_limit": "450000"}}`, callbackAddr),
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, simapp.OogPanicContract),
+			types.CallbackTypeReceivePacket,
+			false,
+		},
+		{
+			"failure: dest callback with low gas (error)",
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, simapp.OogErrorContract),
 			types.CallbackTypeReceivePacket,
 			false,
 		},
 		{
 			"failure: source callback with low gas (panic)",
-			fmt.Sprintf(`{"src_callback": {"address": "%s", "gas_limit": "450000"}}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.OogPanicContract),
+			types.CallbackTypeSendPacket,
+			false,
+		},
+		{
+			"failure: source callback with low gas (error)",
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.OogErrorContract),
 			types.CallbackTypeSendPacket,
 			false,
 		},
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		s.Run(tc.name, func() {
 			s.SetupFeeTransferTest()
 
@@ -127,31 +142,45 @@ func (s *CallbacksTestSuite) TestIncentivizedTransferTimeoutCallbacks() {
 		},
 		{
 			"success: dest callback",
-			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, callbackAddr),
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, simapp.SuccessContract),
 			"none",
 			true, // timeouts don't reach destination chain execution
 		},
 		{
 			"success: source callback",
-			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.SuccessContract),
 			types.CallbackTypeTimeoutPacket,
 			true,
 		},
 		{
 			"success: dest callback with low gas (panic)",
-			fmt.Sprintf(`{"dest_callback": {"address": "%s", "gas_limit": "450000"}}`, callbackAddr),
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, simapp.OogPanicContract),
 			"none", // timeouts don't reach destination chain execution
 			false,
 		},
 		{
 			"failure: source callback with low gas (panic)",
-			fmt.Sprintf(`{"src_callback": {"address": "%s", "gas_limit": "450000"}}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.OogPanicContract),
+			types.CallbackTypeSendPacket,
+			false,
+		},
+		{
+			"success: dest callback with low gas (error)",
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, simapp.OogErrorContract),
+			"none", // timeouts don't reach destination chain execution
+			false,
+		},
+		{
+			"failure: source callback with low gas (error)",
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.OogErrorContract),
 			types.CallbackTypeSendPacket,
 			false,
 		},
 	}
 
 	for _, tc := range testCases {
+		tc := tc
+
 		s.Run(tc.name, func() {
 			s.SetupFeeTransferTest()
 

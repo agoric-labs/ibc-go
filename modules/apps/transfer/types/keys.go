@@ -34,6 +34,8 @@ const (
 	AllowAllPacketDataKeys = "*"
 
 	KeyTotalEscrowPrefix = "totalEscrowForDenom"
+
+	ParamsKey = "params"
 )
 
 var (
