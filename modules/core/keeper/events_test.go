@@ -7,8 +7,8 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/cosmos/ibc-go/v7/modules/core/keeper"
-	"github.com/cosmos/ibc-go/v7/modules/core/types"
+	internalerrors "github.com/cosmos/ibc-go/v10/modules/core/internal/errors"
+	"github.com/cosmos/ibc-go/v10/modules/core/types"
 )
 
 func TestConvertToErrorEvents(t *testing.T) {
@@ -99,7 +99,7 @@ func TestConvertToErrorEvents(t *testing.T) {
 
 			tc.malleate()
 
-			newEvents := keeper.ConvertToErrorEvents(events)
+			newEvents := internalerrors.ConvertToErrorEvents(events)
 			require.Equal(t, expEvents, newEvents)
 		})
 	}

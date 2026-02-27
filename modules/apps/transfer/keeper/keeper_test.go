@@ -1,23 +1,30 @@
 package keeper_test
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
-	"cosmossdk.io/math"
+	testifysuite "github.com/stretchr/testify/suite"
+
+	sdkmath "cosmossdk.io/math"
+	storetypes "cosmossdk.io/store/types"
+
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/codec"
-	storetypes "github.com/cosmos/cosmos-sdk/store/types"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/stretchr/testify/suite"
+	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
+	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 
-	"github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
-	channelkeeper "github.com/cosmos/ibc-go/v7/modules/core/04-channel/keeper"
-	ibctesting "github.com/cosmos/ibc-go/v7/testing"
+	"github.com/cosmos/ibc-go/v10/modules/apps/transfer/keeper"
+	"github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
+	channelkeeper "github.com/cosmos/ibc-go/v10/modules/core/04-channel/keeper"
+	ibctesting "github.com/cosmos/ibc-go/v10/testing"
 )
 
 type KeeperTestSuite struct {
-	suite.Suite
+	testifysuite.Suite
 
 	coordinator *ibctesting.Coordinator
 
@@ -25,8 +32,6 @@ type KeeperTestSuite struct {
 	chainA *ibctesting.TestChain
 	chainB *ibctesting.TestChain
 	chainC *ibctesting.TestChain
-
-	queryClient types.QueryClient
 }
 
 func (suite *KeeperTestSuite) SetupTest() {
@@ -37,72 +42,130 @@ func (suite *KeeperTestSuite) SetupTest() {
 
 	queryHelper := baseapp.NewQueryServerTestHelper(suite.chainA.GetContext(), suite.chainA.GetSimApp().InterfaceRegistry())
 	types.RegisterQueryServer(queryHelper, suite.chainA.GetSimApp().TransferKeeper)
-	suite.queryClient = types.NewQueryClient(queryHelper)
-}
-
-func NewTransferPath(chainA, chainB *ibctesting.TestChain) *ibctesting.Path {
-	path := ibctesting.NewPath(chainA, chainB)
-	path.EndpointA.ChannelConfig.PortID = ibctesting.TransferPort
-	path.EndpointB.ChannelConfig.PortID = ibctesting.TransferPort
-	path.EndpointA.ChannelConfig.Version = types.Version
-	path.EndpointB.ChannelConfig.Version = types.Version
-
-	return path
 }
 
 func TestKeeperTestSuite(t *testing.T) {
-	suite.Run(t, new(KeeperTestSuite))
+	testifysuite.Run(t, new(KeeperTestSuite))
+}
+
+func (suite *KeeperTestSuite) TestNewKeeper() {
+	testCases := []struct {
+		name          string
+		instantiateFn func()
+		panicMsg      string
+	}{
+		{"success", func() {
+			keeper.NewKeeper(
+				suite.chainA.GetSimApp().AppCodec(),
+				runtime.NewKVStoreService(suite.chainA.GetSimApp().GetKey(types.StoreKey)),
+				suite.chainA.GetSimApp().GetSubspace(types.ModuleName),
+				suite.chainA.GetSimApp().IBCKeeper.ChannelKeeper,
+				suite.chainA.GetSimApp().IBCKeeper.ChannelKeeper,
+				suite.chainA.GetSimApp().MsgServiceRouter(),
+				suite.chainA.GetSimApp().AccountKeeper,
+				suite.chainA.GetSimApp().BankKeeper,
+				suite.chainA.GetSimApp().ICAControllerKeeper.GetAuthority(),
+			)
+		}, ""},
+		{"failure: transfer module account does not exist", func() {
+			keeper.NewKeeper(
+				suite.chainA.GetSimApp().AppCodec(),
+				runtime.NewKVStoreService(suite.chainA.GetSimApp().GetKey(types.StoreKey)),
+				suite.chainA.GetSimApp().GetSubspace(types.ModuleName),
+				suite.chainA.GetSimApp().IBCKeeper.ChannelKeeper,
+				suite.chainA.GetSimApp().IBCKeeper.ChannelKeeper,
+				suite.chainA.GetSimApp().MsgServiceRouter(),
+				authkeeper.AccountKeeper{}, // empty account keeper
+				suite.chainA.GetSimApp().BankKeeper,
+				suite.chainA.GetSimApp().ICAControllerKeeper.GetAuthority(),
+			)
+		}, "the IBC transfer module account has not been set"},
+		{"failure: empty authority", func() {
+			keeper.NewKeeper(
+				suite.chainA.GetSimApp().AppCodec(),
+				runtime.NewKVStoreService(suite.chainA.GetSimApp().GetKey(types.StoreKey)),
+				suite.chainA.GetSimApp().GetSubspace(types.ModuleName),
+				suite.chainA.GetSimApp().IBCKeeper.ChannelKeeper,
+				suite.chainA.GetSimApp().IBCKeeper.ChannelKeeper,
+				suite.chainA.GetSimApp().MsgServiceRouter(),
+				suite.chainA.GetSimApp().AccountKeeper,
+				suite.chainA.GetSimApp().BankKeeper,
+				"", // authority
+			)
+		}, "authority must be non-empty"},
+	}
+
+	for _, tc := range testCases {
+
+		suite.SetupTest()
+
+		suite.Run(tc.name, func() {
+			if tc.panicMsg == "" {
+				suite.Require().NotPanics(
+					tc.instantiateFn,
+				)
+			} else {
+				suite.Require().PanicsWithError(
+					tc.panicMsg,
+					tc.instantiateFn,
+				)
+			}
+		})
+	}
 }
 
 func (suite *KeeperTestSuite) TestSetGetTotalEscrowForDenom() {
 	const denom = "atom"
-	var expAmount math.Int
+	var expAmount sdkmath.Int
 
 	testCases := []struct {
 		name     string
 		malleate func()
-		expPass  bool
+		expError error
 	}{
 		{
 			"success: with non-zero escrow amount",
 			func() {},
-			true,
+			nil,
 		},
 		{
 			"success: with escrow amount > 2^63",
 			func() {
-				expAmount, _ = math.NewIntFromString("100000000000000000000")
+				expAmount, _ = sdkmath.NewIntFromString("100000000000000000000")
 			},
-			true,
+			nil,
 		},
 		{
 			"success: escrow amount 0 is not stored",
 			func() {
-				expAmount = math.ZeroInt()
+				expAmount = sdkmath.ZeroInt()
 			},
-			true,
+			nil,
 		},
 		{
 			"failure: setter panics with negative escrow amount",
 			func() {
-				expAmount = math.NewInt(-1)
+				expAmount = sdkmath.NewInt(-1)
 			},
-			false,
+			errors.New("amount cannot be negative: -1"),
 		},
 	}
 
 	for _, tc := range testCases {
-		tc := tc
-
 		suite.Run(tc.name, func() {
 			suite.SetupTest() // reset
-			expAmount = math.NewInt(100)
+			expAmount = sdkmath.NewInt(100)
 			ctx := suite.chainA.GetContext()
 
 			tc.malleate()
 
-			if tc.expPass {
-				suite.chainA.GetSimApp().TransferKeeper.SetTotalEscrowForDenom(ctx, sdk.NewCoin(denom, expAmount))
+			coin := sdk.Coin{
+				Denom:  denom,
+				Amount: expAmount,
+			}
+
+			if tc.expError == nil {
+				suite.chainA.GetSimApp().TransferKeeper.SetTotalEscrowForDenom(ctx, coin)
 				total := suite.chainA.GetSimApp().TransferKeeper.GetTotalEscrowForDenom(ctx, denom)
 				suite.Require().Equal(expAmount, total.Amount)
 
@@ -115,11 +178,11 @@ func (suite *KeeperTestSuite) TestSetGetTotalEscrowForDenom() {
 					suite.Require().True(store.Has(key))
 				}
 			} else {
-				suite.Require().PanicsWithError("negative coin amount: -1", func() {
-					suite.chainA.GetSimApp().TransferKeeper.SetTotalEscrowForDenom(ctx, sdk.NewCoin(denom, expAmount))
+				suite.Require().PanicsWithError(tc.expError.Error(), func() {
+					suite.chainA.GetSimApp().TransferKeeper.SetTotalEscrowForDenom(ctx, coin)
 				})
 				total := suite.chainA.GetSimApp().TransferKeeper.GetTotalEscrowForDenom(ctx, denom)
-				suite.Require().Equal(math.ZeroInt(), total.Amount)
+				suite.Require().Equal(sdkmath.ZeroInt(), total.Amount)
 			}
 		})
 	}
@@ -140,8 +203,8 @@ func (suite *KeeperTestSuite) TestGetAllDenomEscrows() {
 		{
 			"success",
 			func() {
-				denom := "uatom"
-				amount := math.NewInt(100)
+				denom := "uatom" //nolint:goconst
+				amount := sdkmath.NewInt(100)
 				expDenomEscrows = append(expDenomEscrows, sdk.NewCoin(denom, amount))
 
 				bz := cdc.MustMarshal(&sdk.IntProto{Int: amount})
@@ -153,14 +216,14 @@ func (suite *KeeperTestSuite) TestGetAllDenomEscrows() {
 			"success: multiple denoms",
 			func() {
 				denom := "uatom"
-				amount := math.NewInt(100)
+				amount := sdkmath.NewInt(100)
 				expDenomEscrows = append(expDenomEscrows, sdk.NewCoin(denom, amount))
 
 				bz := cdc.MustMarshal(&sdk.IntProto{Int: amount})
 				store.Set(types.TotalEscrowForDenomKey(denom), bz)
 
 				denom = "bar/foo"
-				amount = math.NewInt(50)
+				amount = sdkmath.NewInt(50)
 				expDenomEscrows = append(expDenomEscrows, sdk.NewCoin(denom, amount))
 
 				bz = cdc.MustMarshal(&sdk.IntProto{Int: amount})
@@ -172,7 +235,7 @@ func (suite *KeeperTestSuite) TestGetAllDenomEscrows() {
 			"success: denom with non-alphanumeric characters",
 			func() {
 				denom := "ibc/123-456"
-				amount := math.NewInt(100)
+				amount := sdkmath.NewInt(100)
 				expDenomEscrows = append(expDenomEscrows, sdk.NewCoin(denom, amount))
 
 				bz := cdc.MustMarshal(&sdk.IntProto{Int: amount})
@@ -184,7 +247,7 @@ func (suite *KeeperTestSuite) TestGetAllDenomEscrows() {
 			"failure: empty denom",
 			func() {
 				denom := ""
-				amount := math.ZeroInt()
+				amount := sdkmath.ZeroInt()
 
 				bz := cdc.MustMarshal(&sdk.IntProto{Int: amount})
 				store.Set(types.TotalEscrowForDenomKey(denom), bz)
@@ -195,18 +258,16 @@ func (suite *KeeperTestSuite) TestGetAllDenomEscrows() {
 			"failure: wrong prefix key",
 			func() {
 				denom := "uatom"
-				amount := math.ZeroInt()
+				amount := sdkmath.ZeroInt()
 
 				bz := cdc.MustMarshal(&sdk.IntProto{Int: amount})
-				store.Set([]byte(fmt.Sprintf("wrong-prefix/%s", denom)), bz)
+				store.Set(fmt.Appendf(nil, "wrong-prefix/%s", denom), bz)
 			},
 			false,
 		},
 	}
 
 	for _, tc := range testCases {
-		tc := tc
-
 		suite.Run(tc.name, func() {
 			suite.SetupTest() // reset
 
@@ -231,19 +292,93 @@ func (suite *KeeperTestSuite) TestGetAllDenomEscrows() {
 	}
 }
 
+func (suite *KeeperTestSuite) TestParams() {
+	testCases := []struct {
+		name     string
+		input    types.Params
+		panicMsg string
+	}{
+		// it is not possible to set invalid booleans
+		{"success: set params false-false", types.NewParams(false, false), ""},
+		{"success: set params false-true", types.NewParams(false, true), ""},
+		{"success: set params true-false", types.NewParams(true, false), ""},
+		{"success: set params true-true", types.NewParams(true, true), ""},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest() // reset
+			ctx := suite.chainA.GetContext()
+			if tc.panicMsg == "" {
+				suite.chainA.GetSimApp().TransferKeeper.SetParams(ctx, tc.input)
+				expected := tc.input
+				p := suite.chainA.GetSimApp().TransferKeeper.GetParams(ctx)
+				suite.Require().Equal(expected, p)
+			} else {
+				suite.Require().PanicsWithError(tc.panicMsg, func() {
+					suite.chainA.GetSimApp().TransferKeeper.SetParams(ctx, tc.input)
+				})
+			}
+		})
+	}
+}
+
+func (suite *KeeperTestSuite) TestUnsetParams() {
+	suite.SetupTest()
+
+	ctx := suite.chainA.GetContext()
+	store := suite.chainA.GetContext().KVStore(suite.chainA.GetSimApp().GetKey(types.ModuleName))
+	store.Delete([]byte(types.ParamsKey))
+
+	suite.Require().Panics(func() {
+		suite.chainA.GetSimApp().TransferKeeper.GetParams(ctx)
+	})
+}
+
 func (suite *KeeperTestSuite) TestWithICS4Wrapper() {
 	suite.SetupTest()
 
 	// test if the ics4 wrapper is the channel keeper initially
 	ics4Wrapper := suite.chainA.GetSimApp().TransferKeeper.GetICS4Wrapper()
 
-	_, isChannelKeeper := ics4Wrapper.(channelkeeper.Keeper)
-	suite.Require().False(isChannelKeeper)
+	_, isChannelKeeper := ics4Wrapper.(*channelkeeper.Keeper)
+	suite.Require().True(isChannelKeeper)
+	suite.Require().IsType((*channelkeeper.Keeper)(nil), ics4Wrapper)
 
 	// set the ics4 wrapper to the channel keeper
-	suite.chainA.GetSimApp().TransferKeeper.WithICS4Wrapper(suite.chainA.GetSimApp().IBCKeeper.ChannelKeeper)
+	suite.chainA.GetSimApp().TransferKeeper.WithICS4Wrapper(nil)
 	ics4Wrapper = suite.chainA.GetSimApp().TransferKeeper.GetICS4Wrapper()
+	suite.Require().Nil(ics4Wrapper)
+}
 
-	_, isChannelKeeper = ics4Wrapper.(channelkeeper.Keeper)
-	suite.Require().True(isChannelKeeper)
+func (suite *KeeperTestSuite) TestIsBlockedAddr() {
+	suite.SetupTest()
+
+	testCases := []struct {
+		name     string
+		addr     sdk.AccAddress
+		expBlock bool
+	}{
+		{
+			"transfer module account address",
+			suite.chainA.GetSimApp().AccountKeeper.GetModuleAddress(types.ModuleName),
+			false,
+		},
+		{
+			"regular address",
+			suite.chainA.SenderAccount.GetAddress(),
+			false,
+		},
+		{
+			"blocked address",
+			suite.chainA.GetSimApp().AccountKeeper.GetModuleAddress(minttypes.ModuleName),
+			true,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.Require().Equal(tc.expBlock, suite.chainA.GetSimApp().TransferKeeper.IsBlockedAddr(tc.addr))
+		})
+	}
 }

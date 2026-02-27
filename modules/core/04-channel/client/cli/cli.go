@@ -1,10 +1,11 @@
 package cli
 
 import (
-	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
+	"github.com/cosmos/cosmos-sdk/client"
+
+	"github.com/cosmos/ibc-go/v10/modules/core/04-channel/types"
 )
 
 // GetQueryCmd returns the query commands for IBC channels
@@ -29,23 +30,8 @@ func GetQueryCmd() *cobra.Command {
 		GetCmdQueryUnreceivedPackets(),
 		GetCmdQueryUnreceivedAcks(),
 		GetCmdQueryNextSequenceReceive(),
-		// TODO: next sequence Send ?
+		GetCmdQueryNextSequenceSend(),
 	)
 
 	return queryCmd
-}
-
-// NewTxCmd returns a CLI command handler for all x/ibc channel transaction commands.
-func NewTxCmd() *cobra.Command {
-	txCmd := &cobra.Command{
-		Use:                        types.SubModuleName,
-		Short:                      "IBC channel transaction subcommands",
-		DisableFlagParsing:         true,
-		SuggestionsMinimumDistance: 2,
-		RunE:                       client.ValidateCmd,
-	}
-
-	txCmd.AddCommand()
-
-	return txCmd
 }

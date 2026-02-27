@@ -1,17 +1,16 @@
 package types
 
 import (
+	"slices"
 	"strings"
 
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
-
-	"github.com/cosmos/ibc-go/v7/modules/core/exported"
+	errorsmod "cosmossdk.io/errors"
 )
 
 var (
 	// DefaultIBCVersion represents the latest supported version of IBC used
-	// in connection version negotiation. The current version supports only
-	// ORDERED and UNORDERED channels and requires at least one channel type
+	// in connection version negotiation. The current version supports the list
+	// of orderings defined in SupportedOrderings and requires at least one channel type
 	// to be agreed upon.
 	DefaultIBCVersion = NewVersion(DefaultIBCVersionIdentifier, SupportedOrderings)
 
@@ -28,9 +27,12 @@ var (
 	allowNilFeatureSet = map[string]bool{
 		DefaultIBCVersionIdentifier: false,
 	}
-)
 
-var _ exported.Version = &Version{}
+	// MaxVersionsLength is the maximum number of versions that can be supported
+	MaxCounterpartyVersionsLength = 100
+	// MaxFeaturesLength is the maximum number of features that can be supported
+	MaxFeaturesLength = 100
+)
 
 // NewVersion returns a new instance of Version.
 func NewVersion(identifier string, features []string) *Version {
@@ -54,14 +56,17 @@ func (version Version) GetFeatures() []string {
 // features. It unmarshals the version string into a Version object.
 func ValidateVersion(version *Version) error {
 	if version == nil {
-		return sdkerrors.Wrap(ErrInvalidVersion, "version cannot be nil")
+		return errorsmod.Wrap(ErrInvalidVersion, "version cannot be nil")
 	}
 	if strings.TrimSpace(version.Identifier) == "" {
-		return sdkerrors.Wrap(ErrInvalidVersion, "version identifier cannot be blank")
+		return errorsmod.Wrap(ErrInvalidVersion, "version identifier cannot be blank")
+	}
+	if len(version.Features) > MaxFeaturesLength {
+		return errorsmod.Wrapf(ErrInvalidVersion, "features length must not exceed %d items", MaxFeaturesLength)
 	}
 	for i, feature := range version.Features {
 		if strings.TrimSpace(feature) == "" {
-			return sdkerrors.Wrapf(ErrInvalidVersion, "feature cannot be blank, index %d", i)
+			return errorsmod.Wrapf(ErrInvalidVersion, "feature cannot be blank, index %d", i)
 		}
 	}
 
@@ -72,24 +77,24 @@ func ValidateVersion(version *Version) error {
 // proposed version is supported by this chain. If the feature set is
 // empty it verifies that this is allowed for the specified version
 // identifier.
-func (version Version) VerifyProposedVersion(proposedVersion exported.Version) error {
+func (version Version) VerifyProposedVersion(proposedVersion *Version) error {
 	if proposedVersion.GetIdentifier() != version.GetIdentifier() {
-		return sdkerrors.Wrapf(
+		return errorsmod.Wrapf(
 			ErrVersionNegotiationFailed,
 			"proposed version identifier does not equal supported version identifier (%s != %s)", proposedVersion.GetIdentifier(), version.GetIdentifier(),
 		)
 	}
 
 	if len(proposedVersion.GetFeatures()) == 0 && !allowNilFeatureSet[proposedVersion.GetIdentifier()] {
-		return sdkerrors.Wrapf(
+		return errorsmod.Wrapf(
 			ErrVersionNegotiationFailed,
 			"nil feature sets are not supported for version identifier (%s)", proposedVersion.GetIdentifier(),
 		)
 	}
 
 	for _, proposedFeature := range proposedVersion.GetFeatures() {
-		if !contains(proposedFeature, version.GetFeatures()) {
-			return sdkerrors.Wrapf(
+		if !slices.Contains(version.GetFeatures(), proposedFeature) {
+			return errorsmod.Wrapf(
 				ErrVersionNegotiationFailed,
 				"proposed feature (%s) is not a supported feature set (%s)", proposedFeature, version.GetFeatures(),
 			)
@@ -101,27 +106,22 @@ func (version Version) VerifyProposedVersion(proposedVersion exported.Version) e
 
 // VerifySupportedFeature takes in a version and feature string and returns
 // true if the feature is supported by the version and false otherwise.
-func VerifySupportedFeature(version exported.Version, feature string) bool {
-	for _, f := range version.GetFeatures() {
-		if f == feature {
-			return true
-		}
-	}
-	return false
+func VerifySupportedFeature(version *Version, feature string) bool {
+	return slices.Contains(version.GetFeatures(), feature)
 }
 
 // GetCompatibleVersions returns a descending ordered set of compatible IBC
 // versions for the caller chain's connection end. The latest supported
 // version should be first element and the set should descend to the oldest
 // supported version.
-func GetCompatibleVersions() []exported.Version {
-	return []exported.Version{DefaultIBCVersion}
+func GetCompatibleVersions() []*Version {
+	return []*Version{DefaultIBCVersion}
 }
 
 // IsSupportedVersion returns true if the proposed version has a matching version
 // identifier and its entire feature set is supported or the version identifier
 // supports an empty feature set.
-func IsSupportedVersion(supportedVersions []exported.Version, proposedVersion *Version) bool {
+func IsSupportedVersion(supportedVersions []*Version, proposedVersion *Version) bool {
 	supportedVersion, found := FindSupportedVersion(proposedVersion, supportedVersions)
 	if !found {
 		return false
@@ -137,12 +137,13 @@ func IsSupportedVersion(supportedVersions []exported.Version, proposedVersion *V
 // FindSupportedVersion returns the version with a matching version identifier
 // if it exists. The returned boolean is true if the version is found and
 // false otherwise.
-func FindSupportedVersion(version exported.Version, supportedVersions []exported.Version) (exported.Version, bool) {
+func FindSupportedVersion(version *Version, supportedVersions []*Version) (*Version, bool) {
 	for _, supportedVersion := range supportedVersions {
 		if version.GetIdentifier() == supportedVersion.GetIdentifier() {
 			return supportedVersion, true
 		}
 	}
+
 	return nil, false
 }
 
@@ -157,7 +158,7 @@ func FindSupportedVersion(version exported.Version, supportedVersions []exported
 //
 // CONTRACT: PickVersion must only provide a version that is in the
 // intersection of the supported versions and the counterparty versions.
-func PickVersion(supportedVersions, counterpartyVersions []exported.Version) (*Version, error) {
+func PickVersion(supportedVersions, counterpartyVersions []*Version) (*Version, error) {
 	for _, supportedVersion := range supportedVersions {
 		// check if the source version is supported by the counterparty
 		if counterpartyVersion, found := FindSupportedVersion(supportedVersion, counterpartyVersions); found {
@@ -170,7 +171,7 @@ func PickVersion(supportedVersions, counterpartyVersions []exported.Version) (*V
 		}
 	}
 
-	return nil, sdkerrors.Wrapf(
+	return nil, errorsmod.Wrapf(
 		ErrVersionNegotiationFailed,
 		"failed to find a matching counterparty version (%v) from the supported version list (%v)", counterpartyVersions, supportedVersions,
 	)
@@ -182,44 +183,10 @@ func PickVersion(supportedVersions, counterpartyVersions []exported.Version) (*V
 // set for the counterparty version.
 func GetFeatureSetIntersection(sourceFeatureSet, counterpartyFeatureSet []string) (featureSet []string) {
 	for _, feature := range sourceFeatureSet {
-		if contains(feature, counterpartyFeatureSet) {
+		if slices.Contains(counterpartyFeatureSet, feature) {
 			featureSet = append(featureSet, feature)
 		}
 	}
 
 	return featureSet
-}
-
-// ExportedVersionsToProto casts a slice of the Version interface to a slice
-// of the Version proto definition.
-func ExportedVersionsToProto(exportedVersions []exported.Version) []*Version {
-	versions := make([]*Version, len(exportedVersions))
-	for i := range exportedVersions {
-		versions[i] = exportedVersions[i].(*Version)
-	}
-
-	return versions
-}
-
-// ProtoVersionsToExported converts a slice of the Version proto definition to
-// the Version interface.
-func ProtoVersionsToExported(versions []*Version) []exported.Version {
-	exportedVersions := make([]exported.Version, len(versions))
-	for i := range versions {
-		exportedVersions[i] = versions[i]
-	}
-
-	return exportedVersions
-}
-
-// contains returns true if the provided string element exists within the
-// string set.
-func contains(elem string, set []string) bool {
-	for _, element := range set {
-		if elem == element {
-			return true
-		}
-	}
-
-	return false
 }

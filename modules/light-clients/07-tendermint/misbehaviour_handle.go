@@ -5,18 +5,21 @@ import (
 	"reflect"
 	"time"
 
-	tmtypes "github.com/cometbft/cometbft/types"
+	errorsmod "cosmossdk.io/errors"
+	storetypes "cosmossdk.io/store/types"
+
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
-	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
-	"github.com/cosmos/ibc-go/v7/modules/core/exported"
+	cmttypes "github.com/cometbft/cometbft/types"
+
+	clienttypes "github.com/cosmos/ibc-go/v10/modules/core/02-client/types"
+	"github.com/cosmos/ibc-go/v10/modules/core/exported"
 )
 
 // CheckForMisbehaviour detects duplicate height misbehaviour and BFT time violation misbehaviour
 // in a submitted Header message and verifies the correctness of a submitted Misbehaviour ClientMessage
-func (cs ClientState) CheckForMisbehaviour(ctx sdk.Context, cdc codec.BinaryCodec, clientStore sdk.KVStore, msg exported.ClientMessage) bool {
+func (ClientState) CheckForMisbehaviour(ctx sdk.Context, cdc codec.BinaryCodec, clientStore storetypes.KVStore, msg exported.ClientMessage) bool {
 	switch msg := msg.(type) {
 	case *Header:
 		tmHeader := msg
@@ -25,8 +28,7 @@ func (cs ClientState) CheckForMisbehaviour(ctx sdk.Context, cdc codec.BinaryCode
 		// Check if the Client store already has a consensus state for the header's height
 		// If the consensus state exists, and it matches the header then we return early
 		// since header has already been submitted in a previous UpdateClient.
-		existingConsState, _ := GetConsensusState(clientStore, cdc, tmHeader.GetHeight())
-		if existingConsState != nil {
+		if existingConsState, found := GetConsensusState(clientStore, cdc, tmHeader.GetHeight()); found {
 			// This header has already been submitted and the necessary state is already stored
 			// in client store, thus we can return early without further validation.
 			if reflect.DeepEqual(existingConsState, tmHeader.ConsensusState()) { //nolint:gosimple
@@ -55,12 +57,12 @@ func (cs ClientState) CheckForMisbehaviour(ctx sdk.Context, cdc codec.BinaryCode
 		// if heights are equal check that this is valid misbehaviour of a fork
 		// otherwise if heights are unequal check that this is valid misbehavior of BFT time violation
 		if msg.Header1.GetHeight().EQ(msg.Header2.GetHeight()) {
-			blockID1, err := tmtypes.BlockIDFromProto(&msg.Header1.SignedHeader.Commit.BlockID)
+			blockID1, err := cmttypes.BlockIDFromProto(&msg.Header1.Commit.BlockID)
 			if err != nil {
 				return false
 			}
 
-			blockID2, err := tmtypes.BlockIDFromProto(&msg.Header2.SignedHeader.Commit.BlockID)
+			blockID2, err := cmttypes.BlockIDFromProto(&msg.Header2.Commit.BlockID)
 			if err != nil {
 				return false
 			}
@@ -70,7 +72,7 @@ func (cs ClientState) CheckForMisbehaviour(ctx sdk.Context, cdc codec.BinaryCode
 				return true
 			}
 
-		} else if !msg.Header1.SignedHeader.Header.Time.After(msg.Header2.SignedHeader.Header.Time) {
+		} else if !msg.Header1.Header.Time.After(msg.Header2.Header.Time) {
 			// Header1 is at greater height than Header2, therefore Header1 time must be less than or equal to
 			// Header2 time in order to be valid misbehaviour (violation of monotonic time).
 			return true
@@ -88,18 +90,18 @@ func (cs ClientState) CheckForMisbehaviour(ctx sdk.Context, cdc codec.BinaryCode
 // Similarly, consensusState2 is the trusted consensus state that corresponds
 // to misbehaviour.Header2
 // Misbehaviour sets frozen height to {0, 1} since it is only used as a boolean value (zero or non-zero).
-func (cs *ClientState) verifyMisbehaviour(ctx sdk.Context, clientStore sdk.KVStore, cdc codec.BinaryCodec, misbehaviour *Misbehaviour) error {
+func (cs *ClientState) verifyMisbehaviour(ctx sdk.Context, clientStore storetypes.KVStore, cdc codec.BinaryCodec, misbehaviour *Misbehaviour) error {
 	// Regardless of the type of misbehaviour, ensure that both headers are valid and would have been accepted by light-client
 
 	// Retrieve trusted consensus states for each Header in misbehaviour
 	tmConsensusState1, found := GetConsensusState(clientStore, cdc, misbehaviour.Header1.TrustedHeight)
 	if !found {
-		return sdkerrors.Wrapf(clienttypes.ErrConsensusStateNotFound, "could not get trusted consensus state from clientStore for Header1 at TrustedHeight: %s", misbehaviour.Header1.TrustedHeight)
+		return errorsmod.Wrapf(clienttypes.ErrConsensusStateNotFound, "could not get trusted consensus state from clientStore for Header1 at TrustedHeight: %s", misbehaviour.Header1.TrustedHeight)
 	}
 
 	tmConsensusState2, found := GetConsensusState(clientStore, cdc, misbehaviour.Header2.TrustedHeight)
 	if !found {
-		return sdkerrors.Wrapf(clienttypes.ErrConsensusStateNotFound, "could not get trusted consensus state from clientStore for Header2 at TrustedHeight: %s", misbehaviour.Header2.TrustedHeight)
+		return errorsmod.Wrapf(clienttypes.ErrConsensusStateNotFound, "could not get trusted consensus state from clientStore for Header2 at TrustedHeight: %s", misbehaviour.Header2.TrustedHeight)
 	}
 
 	// Check the validity of the two conflicting headers against their respective
@@ -110,12 +112,12 @@ func (cs *ClientState) verifyMisbehaviour(ctx sdk.Context, clientStore sdk.KVSto
 	if err := checkMisbehaviourHeader(
 		cs, tmConsensusState1, misbehaviour.Header1, ctx.BlockTime(),
 	); err != nil {
-		return sdkerrors.Wrap(err, "verifying Header1 in Misbehaviour failed")
+		return errorsmod.Wrap(err, "verifying Header1 in Misbehaviour failed")
 	}
 	if err := checkMisbehaviourHeader(
 		cs, tmConsensusState2, misbehaviour.Header2, ctx.BlockTime(),
 	); err != nil {
-		return sdkerrors.Wrap(err, "verifying Header2 in Misbehaviour failed")
+		return errorsmod.Wrap(err, "verifying Header2 in Misbehaviour failed")
 	}
 
 	return nil
@@ -126,14 +128,14 @@ func (cs *ClientState) verifyMisbehaviour(ctx sdk.Context, clientStore sdk.KVSto
 func checkMisbehaviourHeader(
 	clientState *ClientState, consState *ConsensusState, header *Header, currentTimestamp time.Time,
 ) error {
-	tmTrustedValset, err := tmtypes.ValidatorSetFromProto(header.TrustedValidators)
+	tmTrustedValset, err := cmttypes.ValidatorSetFromProto(header.TrustedValidators)
 	if err != nil {
-		return sdkerrors.Wrap(err, "trusted validator set is not tendermint validator set type")
+		return errorsmod.Wrap(err, "trusted validator set is not tendermint validator set type")
 	}
 
-	tmCommit, err := tmtypes.CommitFromProto(header.Commit)
+	tmCommit, err := cmttypes.CommitFromProto(header.Commit)
 	if err != nil {
-		return sdkerrors.Wrap(err, "commit is not tendermint commit type")
+		return errorsmod.Wrap(err, "commit is not tendermint commit type")
 	}
 
 	// check the trusted fields for the header against ConsensusState
@@ -143,7 +145,7 @@ func checkMisbehaviourHeader(
 
 	// assert that the age of the trusted consensus state is not older than the trusting period
 	if currentTimestamp.Sub(consState.Timestamp) >= clientState.TrustingPeriod {
-		return sdkerrors.Wrapf(
+		return errorsmod.Wrapf(
 			ErrTrustingPeriodExpired,
 			"current timestamp minus the latest consensus state timestamp is greater than or equal to the trusting period (%d >= %d)",
 			currentTimestamp.Sub(consState.Timestamp), clientState.TrustingPeriod,
@@ -164,7 +166,7 @@ func checkMisbehaviourHeader(
 	if err := tmTrustedValset.VerifyCommitLightTrusting(
 		chainID, tmCommit, clientState.TrustLevel.ToTendermint(),
 	); err != nil {
-		return sdkerrors.Wrapf(clienttypes.ErrInvalidMisbehaviour, "validator set in header has too much change from trusted validator set: %v", err)
+		return errorsmod.Wrapf(clienttypes.ErrInvalidMisbehaviour, "validator set in header has too much change from trusted validator set: %v", err)
 	}
 	return nil
 }

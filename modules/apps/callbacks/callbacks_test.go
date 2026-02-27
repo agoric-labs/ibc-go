@@ -2,43 +2,41 @@ package ibccallbacks_test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 
+	dbm "github.com/cosmos/cosmos-db"
 	"github.com/stretchr/testify/suite"
 
+	"cosmossdk.io/log"
 	sdkmath "cosmossdk.io/math"
+	storetypes "cosmossdk.io/store/types"
 
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 
-	dbm "github.com/cometbft/cometbft-db"
-	"github.com/cometbft/cometbft/libs/log"
+	abci "github.com/cometbft/cometbft/abci/types"
 
-	simapp "github.com/cosmos/ibc-go/modules/apps/callbacks/testing/simapp"
-	"github.com/cosmos/ibc-go/modules/apps/callbacks/types"
-	icacontrollertypes "github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/controller/types"
-	icatypes "github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/types"
-	feetypes "github.com/cosmos/ibc-go/v7/modules/apps/29-fee/types"
-	transfertypes "github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
-	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
-	ibctesting "github.com/cosmos/ibc-go/v7/testing"
-	ibcmock "github.com/cosmos/ibc-go/v7/testing/mock"
+	icacontrollertypes "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/controller/types"
+	icatypes "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/types"
+	"github.com/cosmos/ibc-go/v10/modules/apps/callbacks/testing/simapp"
+	"github.com/cosmos/ibc-go/v10/modules/apps/callbacks/types"
+	transfertypes "github.com/cosmos/ibc-go/v10/modules/apps/transfer/types"
+	clienttypes "github.com/cosmos/ibc-go/v10/modules/core/02-client/types"
+	channeltypes "github.com/cosmos/ibc-go/v10/modules/core/04-channel/types"
+	porttypes "github.com/cosmos/ibc-go/v10/modules/core/05-port/types"
+	ibctesting "github.com/cosmos/ibc-go/v10/testing"
 )
 
 const maxCallbackGas = uint64(1000000)
 
-func init() {
-	ibctesting.DefaultTestingAppInit = SetupTestingApp
-}
-
 // SetupTestingApp provides the duplicated simapp which is specific to the callbacks module on chain creation.
 func SetupTestingApp() (ibctesting.TestingApp, map[string]json.RawMessage) {
 	db := dbm.NewMemDB()
-	encCdc := simapp.MakeTestEncodingConfig()
 	app := simapp.NewSimApp(log.NewNopLogger(), db, nil, true, simtestutil.EmptyAppOptions{})
-	return app, simapp.NewDefaultGenesisState(encCdc.Codec)
+	return app, app.DefaultGenesis()
 }
 
 // GetSimApp returns the duplicated SimApp from within the callbacks directory.
@@ -46,7 +44,7 @@ func SetupTestingApp() (ibctesting.TestingApp, map[string]json.RawMessage) {
 func GetSimApp(chain *ibctesting.TestChain) *simapp.SimApp {
 	app, ok := chain.App.(*simapp.SimApp)
 	if !ok {
-		panic("chain is not a simapp.SimApp")
+		panic(errors.New("chain is not a simapp.SimApp"))
 	}
 	return app
 }
@@ -65,14 +63,10 @@ type CallbacksTestSuite struct {
 
 // setupChains sets up a coordinator with 2 test chains.
 func (s *CallbacksTestSuite) setupChains() {
-	s.coordinator = ibctesting.NewCoordinator(s.T(), 2)
+	s.coordinator = ibctesting.NewCustomAppCoordinator(s.T(), 2, SetupTestingApp)
 	s.chainA = s.coordinator.GetChain(ibctesting.GetChainID(1))
 	s.chainB = s.coordinator.GetChain(ibctesting.GetChainID(2))
 	s.path = ibctesting.NewPath(s.chainA, s.chainB)
-
-	// override the SendMsgs function to not require a successful transaction
-	overrideSendMsg(s.chainA)
-	overrideSendMsg(s.chainB)
 }
 
 // SetupTransferTest sets up a transfer channel between chainA and chainB
@@ -81,43 +75,20 @@ func (s *CallbacksTestSuite) SetupTransferTest() {
 
 	s.path.EndpointA.ChannelConfig.PortID = ibctesting.TransferPort
 	s.path.EndpointB.ChannelConfig.PortID = ibctesting.TransferPort
-	s.path.EndpointA.ChannelConfig.Version = transfertypes.Version
-	s.path.EndpointB.ChannelConfig.Version = transfertypes.Version
+	s.path.EndpointA.ChannelConfig.Version = transfertypes.V1
+	s.path.EndpointB.ChannelConfig.Version = transfertypes.V1
 
-	s.coordinator.Setup(s.path)
-}
-
-// SetupFeeTransferTest sets up a fee middleware enabled transfer channel between chainA and chainB
-func (s *CallbacksTestSuite) SetupFeeTransferTest() {
-	s.setupChains()
-
-	feeTransferVersion := string(feetypes.ModuleCdc.MustMarshalJSON(&feetypes.Metadata{FeeVersion: feetypes.Version, AppVersion: transfertypes.Version}))
-	s.path.EndpointA.ChannelConfig.Version = feeTransferVersion
-	s.path.EndpointB.ChannelConfig.Version = feeTransferVersion
-	s.path.EndpointA.ChannelConfig.PortID = transfertypes.PortID
-	s.path.EndpointB.ChannelConfig.PortID = transfertypes.PortID
-
-	s.coordinator.Setup(s.path)
-}
-
-func (s *CallbacksTestSuite) SetupMockFeeTest() {
-	s.setupChains()
-
-	mockFeeVersion := string(feetypes.ModuleCdc.MustMarshalJSON(&feetypes.Metadata{FeeVersion: feetypes.Version, AppVersion: ibcmock.Version}))
-	s.path.EndpointA.ChannelConfig.Version = mockFeeVersion
-	s.path.EndpointB.ChannelConfig.Version = mockFeeVersion
-	s.path.EndpointA.ChannelConfig.PortID = ibctesting.MockFeePort
-	s.path.EndpointB.ChannelConfig.PortID = ibctesting.MockFeePort
+	s.path.Setup()
 }
 
 // SetupICATest sets up an interchain accounts channel between chainA (controller) and chainB (host).
 // It funds and returns the interchain account address owned by chainA's SenderAccount.
 func (s *CallbacksTestSuite) SetupICATest() string {
 	s.setupChains()
-	s.coordinator.SetupConnections(s.path)
+	s.path.SetupConnections()
 
 	icaOwner := s.chainA.SenderAccount.GetAddress().String()
-	// ICAVersion defines a interchain accounts version string
+	// ICAVersion defines an interchain accounts version string
 	icaVersion := icatypes.NewDefaultMetadataString(s.path.EndpointA.ConnectionID, s.path.EndpointB.ConnectionID)
 	icaControllerPortID, err := icatypes.NewControllerPortID(icaOwner)
 	s.Require().NoError(err)
@@ -156,13 +127,13 @@ func (s *CallbacksTestSuite) SetupICATest() string {
 // RegisterInterchainAccount submits a MsgRegisterInterchainAccount and updates the controller endpoint with the
 // channel created.
 func (s *CallbacksTestSuite) RegisterInterchainAccount(owner string) {
-	msgRegister := icacontrollertypes.NewMsgRegisterInterchainAccountWithOrdering(s.path.EndpointA.ConnectionID, owner, s.path.EndpointA.ChannelConfig.Version, channeltypes.ORDERED)
+	msgRegister := icacontrollertypes.NewMsgRegisterInterchainAccount(s.path.EndpointA.ConnectionID, owner, s.path.EndpointA.ChannelConfig.Version, channeltypes.ORDERED)
 
 	res, err := s.chainA.SendMsgs(msgRegister)
 	s.Require().NotEmpty(res)
 	s.Require().NoError(err)
 
-	channelID, err := ibctesting.ParseChannelIDFromEvents(res.GetEvents())
+	channelID, err := ibctesting.ParseChannelIDFromEvents(res.Events)
 	s.Require().NoError(err)
 
 	s.path.EndpointA.ChannelID = channelID
@@ -247,85 +218,33 @@ func TestIBCCallbacksTestSuite(t *testing.T) {
 	suite.Run(t, new(CallbacksTestSuite))
 }
 
-// AssertHasExecutedExpectedCallbackWithFee checks if only the expected type of callback has been executed
-// and that the expected ics-29 fee has been paid.
-func (s *CallbacksTestSuite) AssertHasExecutedExpectedCallbackWithFee(
-	callbackType types.CallbackType, isSuccessful bool, isTimeout bool,
-	originalSenderBalance sdk.Coins, fee feetypes.Fee,
-) {
-	// Recall that:
-	// - the source chain is chainA
-	// - forward relayer is chainB.SenderAccount
-	// - reverse relayer is chainA.SenderAccount
-	// - The counterparty payee of the forward relayer in chainA is chainB.SenderAccount (as a chainA account)
+// GetExpectedEvent returns the expected event for a callback.
+func GetExpectedEvent(
+	ctx sdk.Context, packetDataUnmarshaler porttypes.PacketDataUnmarshaler, remainingGas uint64, data []byte,
+	eventPortID, eventChannelID string, seq uint64, callbackType types.CallbackType, expError error,
+) (abci.Event, bool) {
+	var (
+		callbackData types.CallbackData
+		isCbPacket   bool
+		err          error
+	)
 
-	// We only check if the fee is paid if the callback is successful.
-	if !isTimeout && isSuccessful {
-		// check forward relay balance
-		s.Require().Equal(
-			fee.RecvFee,
-			sdk.NewCoins(GetSimApp(s.chainA).BankKeeper.GetBalance(s.chainA.GetContext(), s.chainB.SenderAccount.GetAddress(), ibctesting.TestCoin.Denom)),
-		)
+	// Set up gas meter with remainingGas.
+	gasMeter := storetypes.NewGasMeter(remainingGas)
+	ctx = ctx.WithGasMeter(gasMeter)
 
-		s.Require().Equal(
-			fee.AckFee.Add(fee.TimeoutFee...), // ack fee paid, timeout fee refunded
-			sdk.NewCoins(
-				GetSimApp(s.chainA).BankKeeper.GetBalance(
-					s.chainA.GetContext(), s.chainA.SenderAccount.GetAddress(),
-					ibctesting.TestCoin.Denom),
-			).Sub(originalSenderBalance[0]),
-		)
-	} else if isSuccessful {
-		// forward relay balance should be 0
-		s.Require().Equal(
-			sdk.NewCoin(ibctesting.TestCoin.Denom, sdkmath.ZeroInt()),
-			GetSimApp(s.chainA).BankKeeper.GetBalance(s.chainA.GetContext(), s.chainB.SenderAccount.GetAddress(), ibctesting.TestCoin.Denom),
-		)
-
-		// all fees should be returned as sender is the reverse relayer
-		s.Require().Equal(
-			fee.Total(),
-			sdk.NewCoins(
-				GetSimApp(s.chainA).BankKeeper.GetBalance(
-					s.chainA.GetContext(), s.chainA.SenderAccount.GetAddress(),
-					ibctesting.TestCoin.Denom),
-			).Sub(originalSenderBalance[0]),
-		)
+	if callbackType == types.CallbackTypeReceivePacket {
+		packet := channeltypes.NewPacket(data, seq, "", "", eventPortID, eventChannelID, clienttypes.ZeroHeight(), 0)
+		callbackData, isCbPacket, err = types.GetDestCallbackData(ctx, packetDataUnmarshaler, packet, maxCallbackGas)
+	} else {
+		packet := channeltypes.NewPacket(data, seq, eventPortID, eventChannelID, "", "", clienttypes.ZeroHeight(), 0)
+		callbackData, isCbPacket, err = types.GetSourceCallbackData(ctx, packetDataUnmarshaler, packet, maxCallbackGas)
 	}
-	s.AssertHasExecutedExpectedCallback(callbackType, isSuccessful)
-}
-
-// overrideSendMsg overrides both chains' SendMsgs function to a version that doesn't require
-// that the transaction is successful.
-func overrideSendMsg(chain *ibctesting.TestChain) {
-	chain.SendMsgsOverride = func(msgs ...sdk.Msg) (*sdk.Result, error) {
-		// ensure the chain has the latest time
-		chain.Coordinator.UpdateTimeForChain(chain)
-
-		_, r, err := simapp.SignAndDeliver(
-			chain.TxConfig,
-			chain.App.GetBaseApp(),
-			msgs,
-			chain.ChainID,
-			[]uint64{chain.SenderAccount.GetAccountNumber()},
-			[]uint64{chain.SenderAccount.GetSequence()},
-			chain.SenderPrivKey,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		// NextBlock calls app.Commit()
-		chain.NextBlock()
-
-		// increment sequence for successful transaction execution
-		err = chain.SenderAccount.SetSequence(chain.SenderAccount.GetSequence() + 1)
-		if err != nil {
-			return nil, err
-		}
-
-		chain.Coordinator.IncrementTime()
-
-		return r, nil
+	if !isCbPacket || err != nil {
+		return abci.Event{}, false
 	}
+
+	newCtx := sdk.Context{}.WithEventManager(sdk.NewEventManager())
+	types.EmitCallbackEvent(newCtx, eventPortID, eventChannelID, seq, callbackType, callbackData, expError)
+	return newCtx.EventManager().Events().ToABCIEvents()[0], true
 }

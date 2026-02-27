@@ -3,29 +3,27 @@ package types
 import (
 	"fmt"
 
-	ibcexported "github.com/cosmos/ibc-go/v7/modules/core/exported"
+	ibcexported "github.com/cosmos/ibc-go/v10/modules/core/exported"
 )
 
 // IBC channel events
 const (
-	AttributeKeyConnectionID       = "connection_id"
-	AttributeKeyPortID             = "port_id"
-	AttributeKeyChannelID          = "channel_id"
-	AttributeVersion               = "version"
+	AttributeKeyConnectionID   = "connection_id"
+	AttributeKeyPortID         = "port_id"
+	AttributeKeyChannelID      = "channel_id"
+	AttributeKeyChannelState   = "channel_state"
+	AttributeKeyVersion        = "version"
+	AttributeKeyConnectionHops = "connection_hops"
+	AttributeKeyOrdering       = "ordering"
+
 	AttributeCounterpartyPortID    = "counterparty_port_id"
 	AttributeCounterpartyChannelID = "counterparty_channel_id"
 
-	EventTypeSendPacket           = "send_packet"
-	EventTypeRecvPacket           = "recv_packet"
-	EventTypeWriteAck             = "write_acknowledgement"
-	EventTypeAcknowledgePacket    = "acknowledge_packet"
-	EventTypeTimeoutPacket        = "timeout_packet"
-	EventTypeTimeoutPacketOnClose = "timeout_on_close_packet"
-
-	// Deprecated: in favor of AttributeKeyDataHex
-	AttributeKeyData = "packet_data"
-	// Deprecated: in favor of AttributeKeyAckHex
-	AttributeKeyAck = "packet_ack"
+	EventTypeSendPacket        = "send_packet"
+	EventTypeRecvPacket        = "recv_packet"
+	EventTypeWriteAck          = "write_acknowledgement"
+	EventTypeAcknowledgePacket = "acknowledge_packet"
+	EventTypeTimeoutPacket     = "timeout_packet"
 
 	AttributeKeyDataHex          = "packet_data_hex"
 	AttributeKeyAckHex           = "packet_ack_hex"

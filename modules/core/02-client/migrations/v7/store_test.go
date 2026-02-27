@@ -4,14 +4,16 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/stretchr/testify/suite"
+	testifysuite "github.com/stretchr/testify/suite"
 
-	v7 "github.com/cosmos/ibc-go/v7/modules/core/02-client/migrations/v7"
-	"github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
-	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
-	ibcexported "github.com/cosmos/ibc-go/v7/modules/core/exported"
-	ibctesting "github.com/cosmos/ibc-go/v7/testing"
+	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/runtime"
+
+	"github.com/cosmos/ibc-go/v10/modules/core/02-client/migrations/v7"
+	"github.com/cosmos/ibc-go/v10/modules/core/02-client/types"
+	host "github.com/cosmos/ibc-go/v10/modules/core/24-host"
+	ibcexported "github.com/cosmos/ibc-go/v10/modules/core/exported"
+	ibctesting "github.com/cosmos/ibc-go/v10/testing"
 )
 
 // numCreations is the number of clients/consensus states created for
@@ -19,7 +21,7 @@ import (
 const numCreations = 10
 
 type MigrationsV7TestSuite struct {
-	suite.Suite
+	testifysuite.Suite
 
 	coordinator *ibctesting.Coordinator
 
@@ -35,7 +37,7 @@ func (suite *MigrationsV7TestSuite) SetupTest() {
 }
 
 func TestIBCTestSuite(t *testing.T) {
-	suite.Run(t, new(MigrationsV7TestSuite))
+	testifysuite.Run(t, new(MigrationsV7TestSuite))
 }
 
 // create multiple solo machine clients, tendermint and localhost clients
@@ -49,18 +51,18 @@ func (suite *MigrationsV7TestSuite) TestMigrateStore() {
 
 	// create tendermint clients
 	for _, path := range paths {
-		suite.coordinator.SetupClients(path)
+		path.SetupClients()
 	}
 
 	solomachines := []*ibctesting.Solomachine{
-		ibctesting.NewSolomachine(suite.T(), suite.chainA.Codec, "06-solomachine-0", "testing", 1),
+		ibctesting.NewSolomachine(suite.T(), suite.chainA.Codec, ibctesting.DefaultSolomachineClientID, "testing", 1),
 		ibctesting.NewSolomachine(suite.T(), suite.chainA.Codec, "06-solomachine-1", "testing", 4),
 	}
 
 	suite.createSolomachineClients(solomachines)
 	suite.createLocalhostClients()
 
-	err := v7.MigrateStore(suite.chainA.GetContext(), suite.chainA.GetSimApp().GetKey(ibcexported.StoreKey), suite.chainA.App.AppCodec(), suite.chainA.GetSimApp().IBCKeeper.ClientKeeper)
+	err := v7.MigrateStore(suite.chainA.GetContext(), runtime.NewKVStoreService(suite.chainA.GetSimApp().GetKey(ibcexported.StoreKey)), suite.chainA.App.AppCodec(), suite.chainA.GetSimApp().IBCKeeper.ClientKeeper)
 	suite.Require().NoError(err)
 
 	suite.assertSolomachineClients(solomachines)
@@ -69,14 +71,14 @@ func (suite *MigrationsV7TestSuite) TestMigrateStore() {
 
 func (suite *MigrationsV7TestSuite) TestMigrateStoreNoTendermintClients() {
 	solomachines := []*ibctesting.Solomachine{
-		ibctesting.NewSolomachine(suite.T(), suite.chainA.Codec, "06-solomachine-0", "testing", 1),
+		ibctesting.NewSolomachine(suite.T(), suite.chainA.Codec, ibctesting.DefaultSolomachineClientID, "testing", 1),
 		ibctesting.NewSolomachine(suite.T(), suite.chainA.Codec, "06-solomachine-1", "testing", 4),
 	}
 
 	suite.createSolomachineClients(solomachines)
 	suite.createLocalhostClients()
 
-	err := v7.MigrateStore(suite.chainA.GetContext(), suite.chainA.GetSimApp().GetKey(ibcexported.StoreKey), suite.chainA.App.AppCodec(), suite.chainA.GetSimApp().IBCKeeper.ClientKeeper)
+	err := v7.MigrateStore(suite.chainA.GetContext(), runtime.NewKVStoreService(suite.chainA.GetSimApp().GetKey(ibcexported.StoreKey)), suite.chainA.App.AppCodec(), suite.chainA.GetSimApp().IBCKeeper.ClientKeeper)
 	suite.Require().NoError(err)
 
 	suite.assertSolomachineClients(solomachines)
@@ -103,7 +105,8 @@ func (suite *MigrationsV7TestSuite) createSolomachineClients(solomachines []*ibc
 			AllowUpdateAfterProposal: true,
 		}
 
-		cdc := suite.chainA.App.AppCodec().(*codec.ProtoCodec)
+		cdc, ok := suite.chainA.App.AppCodec().(*codec.ProtoCodec)
+		suite.Require().True(ok)
 		v7.RegisterInterfaces(cdc.InterfaceRegistry())
 
 		bz, err := cdc.MarshalInterface(legacyClientState)
@@ -147,13 +150,13 @@ func (suite *MigrationsV7TestSuite) createLocalhostClients() {
 
 		clientStore.Set(host.ClientStateKey(), []byte("clientState"))
 
-		for i := 0; i < numCreations; i++ {
+		for i := range numCreations {
 			clientStore.Set(host.ConsensusStateKey(types.NewHeight(1, uint64(i))), []byte("consensusState"))
 		}
 	}
 }
 
-// assertLocalhostClients asserts that all localhost information has been deleted
+// assertNoLocalhostClients asserts that all localhost information has been deleted
 func (suite *MigrationsV7TestSuite) assertNoLocalhostClients() {
 	for numClients := uint64(0); numClients < numCreations; numClients++ {
 		clientID := v7.Localhost + "-" + strconv.FormatUint(numClients, 10)

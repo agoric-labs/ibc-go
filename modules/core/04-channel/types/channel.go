@@ -1,15 +1,11 @@
 package types
 
 import (
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	"slices"
 
-	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
-	"github.com/cosmos/ibc-go/v7/modules/core/exported"
-)
+	errorsmod "cosmossdk.io/errors"
 
-var (
-	_ exported.ChannelI             = (*Channel)(nil)
-	_ exported.CounterpartyChannelI = (*Counterparty)(nil)
+	host "github.com/cosmos/ibc-go/v10/modules/core/24-host"
 )
 
 // NewChannel creates a new Channel instance
@@ -26,47 +22,22 @@ func NewChannel(
 	}
 }
 
-// GetState implements Channel interface.
-func (ch Channel) GetState() int32 {
-	return int32(ch.State)
-}
-
-// GetOrdering implements Channel interface.
-func (ch Channel) GetOrdering() int32 {
-	return int32(ch.Ordering)
-}
-
-// GetCounterparty implements Channel interface.
-func (ch Channel) GetCounterparty() exported.CounterpartyChannelI {
-	return ch.Counterparty
-}
-
-// GetConnectionHops implements Channel interface.
-func (ch Channel) GetConnectionHops() []string {
-	return ch.ConnectionHops
-}
-
-// GetVersion implements Channel interface.
-func (ch Channel) GetVersion() string {
-	return ch.Version
-}
-
 // ValidateBasic performs a basic validation of the channel fields
 func (ch Channel) ValidateBasic() error {
 	if ch.State == UNINITIALIZED {
 		return ErrInvalidChannelState
 	}
-	if !(ch.Ordering == ORDERED || ch.Ordering == UNORDERED) {
-		return sdkerrors.Wrap(ErrInvalidChannelOrdering, ch.Ordering.String())
+	if !slices.Contains([]Order{ORDERED, UNORDERED}, ch.Ordering) {
+		return errorsmod.Wrap(ErrInvalidChannelOrdering, ch.Ordering.String())
 	}
 	if len(ch.ConnectionHops) != 1 {
-		return sdkerrors.Wrap(
+		return errorsmod.Wrap(
 			ErrTooManyConnectionHops,
 			"current IBC version only supports one connection hop",
 		)
 	}
 	if err := host.ConnectionIdentifierValidator(ch.ConnectionHops[0]); err != nil {
-		return sdkerrors.Wrap(err, "invalid connection hop ID")
+		return errorsmod.Wrap(err, "invalid connection hop ID")
 	}
 	return ch.Counterparty.ValidateBasic()
 }
@@ -79,24 +50,14 @@ func NewCounterparty(portID, channelID string) Counterparty {
 	}
 }
 
-// GetPortID implements CounterpartyChannelI interface
-func (c Counterparty) GetPortID() string {
-	return c.PortId
-}
-
-// GetChannelID implements CounterpartyChannelI interface
-func (c Counterparty) GetChannelID() string {
-	return c.ChannelId
-}
-
 // ValidateBasic performs a basic validation check of the identifiers
 func (c Counterparty) ValidateBasic() error {
 	if err := host.PortIdentifierValidator(c.PortId); err != nil {
-		return sdkerrors.Wrap(err, "invalid counterparty port ID")
+		return errorsmod.Wrap(err, "invalid counterparty port ID")
 	}
 	if c.ChannelId != "" {
 		if err := host.ChannelIdentifierValidator(c.ChannelId); err != nil {
-			return sdkerrors.Wrap(err, "invalid counterparty channel ID")
+			return errorsmod.Wrap(err, "invalid counterparty channel ID")
 		}
 	}
 	return nil
@@ -118,10 +79,10 @@ func NewIdentifiedChannel(portID, channelID string, ch Channel) IdentifiedChanne
 // ValidateBasic performs a basic validation of the identifiers and channel fields.
 func (ic IdentifiedChannel) ValidateBasic() error {
 	if err := host.ChannelIdentifierValidator(ic.ChannelId); err != nil {
-		return sdkerrors.Wrap(err, "invalid channel ID")
+		return errorsmod.Wrap(err, "invalid channel ID")
 	}
 	if err := host.PortIdentifierValidator(ic.PortId); err != nil {
-		return sdkerrors.Wrap(err, "invalid port ID")
+		return errorsmod.Wrap(err, "invalid port ID")
 	}
 	channel := NewChannel(ic.State, ic.Ordering, ic.Counterparty, ic.ConnectionHops, ic.Version)
 	return channel.ValidateBasic()

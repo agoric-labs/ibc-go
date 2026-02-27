@@ -5,8 +5,11 @@ package types
 
 import (
 	context "context"
+	types1 "cosmossdk.io/x/upgrade/types"
 	fmt "fmt"
 	types "github.com/cosmos/cosmos-sdk/codec/types"
+	_ "github.com/cosmos/cosmos-sdk/types/msgservice"
+	_ "github.com/cosmos/cosmos-sdk/types/tx/amino"
 	_ "github.com/cosmos/gogoproto/gogoproto"
 	grpc1 "github.com/cosmos/gogoproto/grpc"
 	proto "github.com/cosmos/gogoproto/proto"
@@ -32,10 +35,10 @@ const _ = proto.GoGoProtoPackageIsVersion3 // please upgrade the proto package
 // MsgCreateClient defines a message to create an IBC client
 type MsgCreateClient struct {
 	// light client state
-	ClientState *types.Any `protobuf:"bytes,1,opt,name=client_state,json=clientState,proto3" json:"client_state,omitempty" yaml:"client_state"`
+	ClientState *types.Any `protobuf:"bytes,1,opt,name=client_state,json=clientState,proto3" json:"client_state,omitempty"`
 	// consensus state associated with the client that corresponds to a given
 	// height.
-	ConsensusState *types.Any `protobuf:"bytes,2,opt,name=consensus_state,json=consensusState,proto3" json:"consensus_state,omitempty" yaml:"consensus_state"`
+	ConsensusState *types.Any `protobuf:"bytes,2,opt,name=consensus_state,json=consensusState,proto3" json:"consensus_state,omitempty"`
 	// signer address
 	Signer string `protobuf:"bytes,3,opt,name=signer,proto3" json:"signer,omitempty"`
 }
@@ -75,6 +78,7 @@ var xxx_messageInfo_MsgCreateClient proto.InternalMessageInfo
 
 // MsgCreateClientResponse defines the Msg/CreateClient response type.
 type MsgCreateClientResponse struct {
+	ClientId string `protobuf:"bytes,1,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
 }
 
 func (m *MsgCreateClientResponse) Reset()         { *m = MsgCreateClientResponse{} }
@@ -114,7 +118,7 @@ var xxx_messageInfo_MsgCreateClientResponse proto.InternalMessageInfo
 // the given client message.
 type MsgUpdateClient struct {
 	// client unique identifier
-	ClientId string `protobuf:"bytes,1,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty" yaml:"client_id"`
+	ClientId string `protobuf:"bytes,1,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
 	// client message to update the light client
 	ClientMessage *types.Any `protobuf:"bytes,2,opt,name=client_message,json=clientMessage,proto3" json:"client_message,omitempty"`
 	// signer address
@@ -195,16 +199,16 @@ var xxx_messageInfo_MsgUpdateClientResponse proto.InternalMessageInfo
 // state
 type MsgUpgradeClient struct {
 	// client unique identifier
-	ClientId string `protobuf:"bytes,1,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty" yaml:"client_id"`
+	ClientId string `protobuf:"bytes,1,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
 	// upgraded client state
-	ClientState *types.Any `protobuf:"bytes,2,opt,name=client_state,json=clientState,proto3" json:"client_state,omitempty" yaml:"client_state"`
+	ClientState *types.Any `protobuf:"bytes,2,opt,name=client_state,json=clientState,proto3" json:"client_state,omitempty"`
 	// upgraded consensus state, only contains enough information to serve as a
 	// basis of trust in update logic
-	ConsensusState *types.Any `protobuf:"bytes,3,opt,name=consensus_state,json=consensusState,proto3" json:"consensus_state,omitempty" yaml:"consensus_state"`
+	ConsensusState *types.Any `protobuf:"bytes,3,opt,name=consensus_state,json=consensusState,proto3" json:"consensus_state,omitempty"`
 	// proof that old chain committed to new client
-	ProofUpgradeClient []byte `protobuf:"bytes,4,opt,name=proof_upgrade_client,json=proofUpgradeClient,proto3" json:"proof_upgrade_client,omitempty" yaml:"proof_upgrade_client"`
+	ProofUpgradeClient []byte `protobuf:"bytes,4,opt,name=proof_upgrade_client,json=proofUpgradeClient,proto3" json:"proof_upgrade_client,omitempty"`
 	// proof that old chain committed to new consensus state
-	ProofUpgradeConsensusState []byte `protobuf:"bytes,5,opt,name=proof_upgrade_consensus_state,json=proofUpgradeConsensusState,proto3" json:"proof_upgrade_consensus_state,omitempty" yaml:"proof_upgrade_consensus_state"`
+	ProofUpgradeConsensusState []byte `protobuf:"bytes,5,opt,name=proof_upgrade_consensus_state,json=proofUpgradeConsensusState,proto3" json:"proof_upgrade_consensus_state,omitempty"`
 	// signer address
 	Signer string `protobuf:"bytes,6,opt,name=signer,proto3" json:"signer,omitempty"`
 }
@@ -281,14 +285,16 @@ var xxx_messageInfo_MsgUpgradeClientResponse proto.InternalMessageInfo
 
 // MsgSubmitMisbehaviour defines an sdk.Msg type that submits Evidence for
 // light client misbehaviour.
-// Warning: DEPRECATED
+// This message has been deprecated. Use MsgUpdateClient instead.
+//
+// Deprecated: Do not use.
 type MsgSubmitMisbehaviour struct {
 	// client unique identifier
-	ClientId string `protobuf:"bytes,1,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty" yaml:"client_id"` // Deprecated: Do not use.
+	ClientId string `protobuf:"bytes,1,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
 	// misbehaviour used for freezing the light client
-	Misbehaviour *types.Any `protobuf:"bytes,2,opt,name=misbehaviour,proto3" json:"misbehaviour,omitempty"` // Deprecated: Do not use.
+	Misbehaviour *types.Any `protobuf:"bytes,2,opt,name=misbehaviour,proto3" json:"misbehaviour,omitempty"`
 	// signer address
-	Signer string `protobuf:"bytes,3,opt,name=signer,proto3" json:"signer,omitempty"` // Deprecated: Do not use.
+	Signer string `protobuf:"bytes,3,opt,name=signer,proto3" json:"signer,omitempty"`
 }
 
 func (m *MsgSubmitMisbehaviour) Reset()         { *m = MsgSubmitMisbehaviour{} }
@@ -362,6 +368,352 @@ func (m *MsgSubmitMisbehaviourResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_MsgSubmitMisbehaviourResponse proto.InternalMessageInfo
 
+// MsgRecoverClient defines the message used to recover a frozen or expired client.
+type MsgRecoverClient struct {
+	// the client identifier for the client to be updated if the proposal passes
+	SubjectClientId string `protobuf:"bytes,1,opt,name=subject_client_id,json=subjectClientId,proto3" json:"subject_client_id,omitempty"`
+	// the substitute client identifier for the client which will replace the subject
+	// client
+	SubstituteClientId string `protobuf:"bytes,2,opt,name=substitute_client_id,json=substituteClientId,proto3" json:"substitute_client_id,omitempty"`
+	// signer address
+	Signer string `protobuf:"bytes,3,opt,name=signer,proto3" json:"signer,omitempty"`
+}
+
+func (m *MsgRecoverClient) Reset()         { *m = MsgRecoverClient{} }
+func (m *MsgRecoverClient) String() string { return proto.CompactTextString(m) }
+func (*MsgRecoverClient) ProtoMessage()    {}
+func (*MsgRecoverClient) Descriptor() ([]byte, []int) {
+	return fileDescriptor_cb5dc4651eb49a04, []int{8}
+}
+func (m *MsgRecoverClient) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MsgRecoverClient) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgRecoverClient.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MsgRecoverClient) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgRecoverClient.Merge(m, src)
+}
+func (m *MsgRecoverClient) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgRecoverClient) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgRecoverClient.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgRecoverClient proto.InternalMessageInfo
+
+// MsgRecoverClientResponse defines the Msg/RecoverClient response type.
+type MsgRecoverClientResponse struct {
+}
+
+func (m *MsgRecoverClientResponse) Reset()         { *m = MsgRecoverClientResponse{} }
+func (m *MsgRecoverClientResponse) String() string { return proto.CompactTextString(m) }
+func (*MsgRecoverClientResponse) ProtoMessage()    {}
+func (*MsgRecoverClientResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_cb5dc4651eb49a04, []int{9}
+}
+func (m *MsgRecoverClientResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MsgRecoverClientResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgRecoverClientResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MsgRecoverClientResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgRecoverClientResponse.Merge(m, src)
+}
+func (m *MsgRecoverClientResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgRecoverClientResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgRecoverClientResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgRecoverClientResponse proto.InternalMessageInfo
+
+// MsgIBCSoftwareUpgrade defines the message used to schedule an upgrade of an IBC client using a v1 governance proposal
+type MsgIBCSoftwareUpgrade struct {
+	Plan types1.Plan `protobuf:"bytes,1,opt,name=plan,proto3" json:"plan"`
+	// An UpgradedClientState must be provided to perform an IBC breaking upgrade.
+	// This will make the chain commit to the correct upgraded (self) client state
+	// before the upgrade occurs, so that connecting chains can verify that the
+	// new upgraded client is valid by verifying a proof on the previous version
+	// of the chain. This will allow IBC connections to persist smoothly across
+	// planned chain upgrades. Correspondingly, the UpgradedClientState field has been
+	// deprecated in the Cosmos SDK to allow for this logic to exist solely in
+	// the 02-client module.
+	UpgradedClientState *types.Any `protobuf:"bytes,2,opt,name=upgraded_client_state,json=upgradedClientState,proto3" json:"upgraded_client_state,omitempty"`
+	// signer address
+	Signer string `protobuf:"bytes,3,opt,name=signer,proto3" json:"signer,omitempty"`
+}
+
+func (m *MsgIBCSoftwareUpgrade) Reset()         { *m = MsgIBCSoftwareUpgrade{} }
+func (m *MsgIBCSoftwareUpgrade) String() string { return proto.CompactTextString(m) }
+func (*MsgIBCSoftwareUpgrade) ProtoMessage()    {}
+func (*MsgIBCSoftwareUpgrade) Descriptor() ([]byte, []int) {
+	return fileDescriptor_cb5dc4651eb49a04, []int{10}
+}
+func (m *MsgIBCSoftwareUpgrade) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MsgIBCSoftwareUpgrade) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgIBCSoftwareUpgrade.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MsgIBCSoftwareUpgrade) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgIBCSoftwareUpgrade.Merge(m, src)
+}
+func (m *MsgIBCSoftwareUpgrade) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgIBCSoftwareUpgrade) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgIBCSoftwareUpgrade.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgIBCSoftwareUpgrade proto.InternalMessageInfo
+
+func (m *MsgIBCSoftwareUpgrade) GetPlan() types1.Plan {
+	if m != nil {
+		return m.Plan
+	}
+	return types1.Plan{}
+}
+
+func (m *MsgIBCSoftwareUpgrade) GetUpgradedClientState() *types.Any {
+	if m != nil {
+		return m.UpgradedClientState
+	}
+	return nil
+}
+
+func (m *MsgIBCSoftwareUpgrade) GetSigner() string {
+	if m != nil {
+		return m.Signer
+	}
+	return ""
+}
+
+// MsgIBCSoftwareUpgradeResponse defines the Msg/IBCSoftwareUpgrade response type.
+type MsgIBCSoftwareUpgradeResponse struct {
+}
+
+func (m *MsgIBCSoftwareUpgradeResponse) Reset()         { *m = MsgIBCSoftwareUpgradeResponse{} }
+func (m *MsgIBCSoftwareUpgradeResponse) String() string { return proto.CompactTextString(m) }
+func (*MsgIBCSoftwareUpgradeResponse) ProtoMessage()    {}
+func (*MsgIBCSoftwareUpgradeResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_cb5dc4651eb49a04, []int{11}
+}
+func (m *MsgIBCSoftwareUpgradeResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MsgIBCSoftwareUpgradeResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgIBCSoftwareUpgradeResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MsgIBCSoftwareUpgradeResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgIBCSoftwareUpgradeResponse.Merge(m, src)
+}
+func (m *MsgIBCSoftwareUpgradeResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgIBCSoftwareUpgradeResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgIBCSoftwareUpgradeResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgIBCSoftwareUpgradeResponse proto.InternalMessageInfo
+
+// MsgUpdateParams defines the sdk.Msg type to update the client parameters.
+type MsgUpdateParams struct {
+	// signer address
+	Signer string `protobuf:"bytes,1,opt,name=signer,proto3" json:"signer,omitempty"`
+	// params defines the client parameters to update.
+	//
+	// NOTE: All parameters must be supplied.
+	Params Params `protobuf:"bytes,2,opt,name=params,proto3" json:"params"`
+}
+
+func (m *MsgUpdateParams) Reset()         { *m = MsgUpdateParams{} }
+func (m *MsgUpdateParams) String() string { return proto.CompactTextString(m) }
+func (*MsgUpdateParams) ProtoMessage()    {}
+func (*MsgUpdateParams) Descriptor() ([]byte, []int) {
+	return fileDescriptor_cb5dc4651eb49a04, []int{12}
+}
+func (m *MsgUpdateParams) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MsgUpdateParams) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgUpdateParams.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MsgUpdateParams) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgUpdateParams.Merge(m, src)
+}
+func (m *MsgUpdateParams) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgUpdateParams) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgUpdateParams.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgUpdateParams proto.InternalMessageInfo
+
+// MsgUpdateParamsResponse defines the MsgUpdateParams response type.
+type MsgUpdateParamsResponse struct {
+}
+
+func (m *MsgUpdateParamsResponse) Reset()         { *m = MsgUpdateParamsResponse{} }
+func (m *MsgUpdateParamsResponse) String() string { return proto.CompactTextString(m) }
+func (*MsgUpdateParamsResponse) ProtoMessage()    {}
+func (*MsgUpdateParamsResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_cb5dc4651eb49a04, []int{13}
+}
+func (m *MsgUpdateParamsResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MsgUpdateParamsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgUpdateParamsResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MsgUpdateParamsResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgUpdateParamsResponse.Merge(m, src)
+}
+func (m *MsgUpdateParamsResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgUpdateParamsResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgUpdateParamsResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgUpdateParamsResponse proto.InternalMessageInfo
+
+// MsgDeleteClientCreator defines a message to delete the client creator of a client
+type MsgDeleteClientCreator struct {
+	// client identifier
+	ClientId string `protobuf:"bytes,1,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
+	// signer address
+	Signer string `protobuf:"bytes,2,opt,name=signer,proto3" json:"signer,omitempty"`
+}
+
+func (m *MsgDeleteClientCreator) Reset()         { *m = MsgDeleteClientCreator{} }
+func (m *MsgDeleteClientCreator) String() string { return proto.CompactTextString(m) }
+func (*MsgDeleteClientCreator) ProtoMessage()    {}
+func (*MsgDeleteClientCreator) Descriptor() ([]byte, []int) {
+	return fileDescriptor_cb5dc4651eb49a04, []int{14}
+}
+func (m *MsgDeleteClientCreator) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MsgDeleteClientCreator) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgDeleteClientCreator.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MsgDeleteClientCreator) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgDeleteClientCreator.Merge(m, src)
+}
+func (m *MsgDeleteClientCreator) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgDeleteClientCreator) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgDeleteClientCreator.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgDeleteClientCreator proto.InternalMessageInfo
+
+// MsgDeleteClientCreatorResponse defines the Msg/DeleteClientCreator response type.
+type MsgDeleteClientCreatorResponse struct {
+}
+
+func (m *MsgDeleteClientCreatorResponse) Reset()         { *m = MsgDeleteClientCreatorResponse{} }
+func (m *MsgDeleteClientCreatorResponse) String() string { return proto.CompactTextString(m) }
+func (*MsgDeleteClientCreatorResponse) ProtoMessage()    {}
+func (*MsgDeleteClientCreatorResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_cb5dc4651eb49a04, []int{15}
+}
+func (m *MsgDeleteClientCreatorResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MsgDeleteClientCreatorResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_MsgDeleteClientCreatorResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *MsgDeleteClientCreatorResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MsgDeleteClientCreatorResponse.Merge(m, src)
+}
+func (m *MsgDeleteClientCreatorResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *MsgDeleteClientCreatorResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_MsgDeleteClientCreatorResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MsgDeleteClientCreatorResponse proto.InternalMessageInfo
+
 func init() {
 	proto.RegisterType((*MsgCreateClient)(nil), "ibc.core.client.v1.MsgCreateClient")
 	proto.RegisterType((*MsgCreateClientResponse)(nil), "ibc.core.client.v1.MsgCreateClientResponse")
@@ -371,51 +723,77 @@ func init() {
 	proto.RegisterType((*MsgUpgradeClientResponse)(nil), "ibc.core.client.v1.MsgUpgradeClientResponse")
 	proto.RegisterType((*MsgSubmitMisbehaviour)(nil), "ibc.core.client.v1.MsgSubmitMisbehaviour")
 	proto.RegisterType((*MsgSubmitMisbehaviourResponse)(nil), "ibc.core.client.v1.MsgSubmitMisbehaviourResponse")
+	proto.RegisterType((*MsgRecoverClient)(nil), "ibc.core.client.v1.MsgRecoverClient")
+	proto.RegisterType((*MsgRecoverClientResponse)(nil), "ibc.core.client.v1.MsgRecoverClientResponse")
+	proto.RegisterType((*MsgIBCSoftwareUpgrade)(nil), "ibc.core.client.v1.MsgIBCSoftwareUpgrade")
+	proto.RegisterType((*MsgIBCSoftwareUpgradeResponse)(nil), "ibc.core.client.v1.MsgIBCSoftwareUpgradeResponse")
+	proto.RegisterType((*MsgUpdateParams)(nil), "ibc.core.client.v1.MsgUpdateParams")
+	proto.RegisterType((*MsgUpdateParamsResponse)(nil), "ibc.core.client.v1.MsgUpdateParamsResponse")
+	proto.RegisterType((*MsgDeleteClientCreator)(nil), "ibc.core.client.v1.MsgDeleteClientCreator")
+	proto.RegisterType((*MsgDeleteClientCreatorResponse)(nil), "ibc.core.client.v1.MsgDeleteClientCreatorResponse")
 }
 
 func init() { proto.RegisterFile("ibc/core/client/v1/tx.proto", fileDescriptor_cb5dc4651eb49a04) }
 
 var fileDescriptor_cb5dc4651eb49a04 = []byte{
-	// 623 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x55, 0xcd, 0x6e, 0xd3, 0x4c,
-	0x14, 0x8d, 0x9b, 0xef, 0x8b, 0x9a, 0x69, 0xfa, 0x23, 0x13, 0x52, 0xd7, 0x55, 0xed, 0xc8, 0x74,
-	0x11, 0x04, 0xb5, 0x49, 0xba, 0x00, 0x15, 0x36, 0xa4, 0x2b, 0x16, 0x91, 0xc0, 0x15, 0x0b, 0xd8,
-	0x04, 0xff, 0x4c, 0xa7, 0x23, 0x62, 0x4f, 0xe4, 0xb1, 0x23, 0xf2, 0x06, 0x2c, 0x79, 0x84, 0x0a,
-	0x5e, 0x80, 0xc7, 0x60, 0xd9, 0x05, 0x0b, 0x56, 0x51, 0x95, 0x6c, 0x58, 0xe7, 0x09, 0x50, 0x3c,
-	0x4e, 0xb0, 0x1d, 0x3b, 0x8a, 0x04, 0xec, 0x3c, 0x73, 0xcf, 0x9c, 0x73, 0x8f, 0xcf, 0x1d, 0x1b,
-	0x1c, 0x62, 0xd3, 0xd2, 0x2c, 0xe2, 0x41, 0xcd, 0xea, 0x61, 0xe8, 0xfa, 0xda, 0xa0, 0xa9, 0xf9,
-	0x1f, 0xd4, 0xbe, 0x47, 0x7c, 0xc2, 0xf3, 0xd8, 0xb4, 0xd4, 0x59, 0x51, 0x65, 0x45, 0x75, 0xd0,
-	0x14, 0xab, 0x88, 0x20, 0x12, 0x96, 0xb5, 0xd9, 0x13, 0x43, 0x8a, 0x07, 0x88, 0x10, 0xd4, 0x83,
-	0x5a, 0xb8, 0x32, 0x83, 0x4b, 0xcd, 0x70, 0x87, 0xac, 0xa4, 0xdc, 0x72, 0x60, 0xb7, 0x43, 0xd1,
-	0xb9, 0x07, 0x0d, 0x1f, 0x9e, 0x87, 0x3c, 0xfc, 0x4b, 0x50, 0x61, 0x8c, 0x5d, 0xea, 0x1b, 0x3e,
-	0x14, 0xb8, 0x3a, 0xd7, 0xd8, 0x6a, 0x55, 0x55, 0xc6, 0xa2, 0xce, 0x59, 0xd4, 0xe7, 0xee, 0xb0,
-	0xbd, 0x3f, 0x1d, 0xc9, 0x77, 0x86, 0x86, 0xd3, 0x3b, 0x53, 0xe2, 0x67, 0x14, 0x7d, 0x8b, 0x2d,
-	0x2f, 0x66, 0x2b, 0xfe, 0x0d, 0xd8, 0xb5, 0x88, 0x4b, 0xa1, 0x4b, 0x03, 0x1a, 0x91, 0x6e, 0xac,
-	0x20, 0x15, 0xa7, 0x23, 0xb9, 0x16, 0x91, 0x26, 0x8f, 0x29, 0xfa, 0xce, 0x62, 0x87, 0x51, 0xd7,
-	0x40, 0x89, 0x62, 0xe4, 0x42, 0x4f, 0x28, 0xd6, 0xb9, 0x46, 0x59, 0x8f, 0x56, 0x67, 0x9b, 0x1f,
-	0xaf, 0xe5, 0xc2, 0xcf, 0x6b, 0xb9, 0xa0, 0x1c, 0x80, 0xfd, 0x94, 0x43, 0x1d, 0xd2, 0xfe, 0x8c,
-	0x45, 0xf9, 0xc2, 0xdc, 0xbf, 0xee, 0xdb, 0xbf, 0xdd, 0x37, 0x41, 0x39, 0x72, 0x82, 0xed, 0xd0,
-	0x7a, 0xb9, 0x5d, 0x9d, 0x8e, 0xe4, 0xbd, 0x84, 0x49, 0x6c, 0x2b, 0xfa, 0x26, 0x7b, 0x7e, 0x61,
-	0xf3, 0x4f, 0xc1, 0x4e, 0xb4, 0xef, 0x40, 0x4a, 0x0d, 0xb4, 0xd2, 0x9d, 0xbe, 0xcd, 0xb0, 0x1d,
-	0x06, 0x5d, 0xdb, 0x40, 0xbc, 0xc9, 0x85, 0x81, 0xef, 0x45, 0xb0, 0x17, 0xd6, 0x90, 0x67, 0xd8,
-	0x7f, 0xe0, 0x20, 0x1d, 0xf9, 0xc6, 0xbf, 0x88, 0xbc, 0xf8, 0x97, 0x22, 0x7f, 0x05, 0xaa, 0x7d,
-	0x8f, 0x90, 0xcb, 0x6e, 0xc0, 0x6c, 0x77, 0x99, 0xae, 0xf0, 0x5f, 0x9d, 0x6b, 0x54, 0xda, 0xf2,
-	0x74, 0x24, 0x1f, 0x32, 0xa6, 0x2c, 0x94, 0xa2, 0xf3, 0xe1, 0x76, 0xf2, 0x95, 0xbd, 0x07, 0x47,
-	0x29, 0x70, 0xaa, 0xf7, 0xff, 0x43, 0xee, 0xc6, 0x74, 0x24, 0x1f, 0x67, 0x72, 0xa7, 0x7b, 0x16,
-	0x13, 0x22, 0x79, 0x23, 0x5b, 0xca, 0x49, 0x5c, 0x04, 0x42, 0x3a, 0xd5, 0x45, 0xe4, 0x5f, 0x39,
-	0x70, 0xb7, 0x43, 0xd1, 0x45, 0x60, 0x3a, 0xd8, 0xef, 0x60, 0x6a, 0xc2, 0x2b, 0x63, 0x80, 0x49,
-	0xe0, 0xf1, 0xa7, 0xcb, 0xb9, 0xd7, 0xb2, 0x72, 0x17, 0xb8, 0x58, 0xf2, 0xcf, 0x40, 0xc5, 0x89,
-	0x91, 0xac, 0x4c, 0x7e, 0x43, 0xe0, 0xf4, 0x04, 0x9a, 0x17, 0x93, 0xc3, 0x1b, 0x22, 0x96, 0xed,
-	0xc8, 0xe0, 0x28, 0xb3, 0xe3, 0xb9, 0xa7, 0xd6, 0xe7, 0x22, 0x28, 0x76, 0x28, 0xe2, 0xdf, 0x81,
-	0x4a, 0xe2, 0x4b, 0x74, 0x4f, 0x5d, 0xfe, 0xc6, 0xa9, 0xa9, 0xcb, 0x2c, 0x3e, 0x58, 0x03, 0x34,
-	0x57, 0x9a, 0x29, 0x24, 0x6e, 0x7b, 0x9e, 0x42, 0x1c, 0x94, 0xab, 0x90, 0x75, 0x25, 0x79, 0x0b,
-	0x6c, 0x27, 0x67, 0xeb, 0x38, 0xf7, 0x74, 0x0c, 0x25, 0x3e, 0x5c, 0x07, 0xb5, 0x10, 0xf1, 0x00,
-	0x9f, 0x31, 0x00, 0xf7, 0x73, 0x38, 0x96, 0xa1, 0x62, 0x73, 0x6d, 0xe8, 0x5c, 0xb3, 0xad, 0x7f,
-	0x1b, 0x4b, 0xdc, 0xcd, 0x58, 0xe2, 0x6e, 0xc7, 0x12, 0xf7, 0x69, 0x22, 0x15, 0x6e, 0x26, 0x52,
-	0xe1, 0xc7, 0x44, 0x2a, 0xbc, 0x7d, 0x82, 0xb0, 0x7f, 0x15, 0x98, 0xaa, 0x45, 0x1c, 0xcd, 0x22,
-	0xd4, 0x21, 0x54, 0xc3, 0xa6, 0x75, 0x82, 0x88, 0x36, 0x78, 0xac, 0x39, 0xc4, 0x0e, 0x7a, 0x90,
-	0xb2, 0xdf, 0xd8, 0xa3, 0xd6, 0x49, 0xf4, 0x27, 0xf3, 0x87, 0x7d, 0x48, 0xcd, 0x52, 0x38, 0x5f,
-	0xa7, 0xbf, 0x02, 0x00, 0x00, 0xff, 0xff, 0x0d, 0x8f, 0x23, 0x99, 0xe9, 0x06, 0x00, 0x00,
+	// 898 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x56, 0xbf, 0x73, 0xe3, 0x44,
+	0x14, 0xb6, 0x1c, 0x9f, 0x87, 0x6c, 0x7c, 0x67, 0xb2, 0xe7, 0xbb, 0xf3, 0x29, 0x9c, 0xed, 0x31,
+	0x29, 0x82, 0x21, 0x92, 0x6d, 0x66, 0x20, 0x04, 0x28, 0x12, 0x53, 0x90, 0xc2, 0x33, 0x19, 0x7b,
+	0x68, 0x28, 0x70, 0x24, 0x79, 0xad, 0x08, 0x2c, 0xad, 0x46, 0xbb, 0x32, 0xa4, 0x63, 0xa8, 0x18,
+	0x2a, 0x0a, 0x1a, 0x3a, 0xfe, 0x84, 0x0c, 0x1d, 0x0d, 0x1d, 0x33, 0x29, 0x53, 0x52, 0x31, 0x90,
+	0x14, 0xf9, 0x37, 0x18, 0xef, 0xae, 0x14, 0x49, 0x96, 0x14, 0x33, 0x34, 0x1e, 0x4b, 0xef, 0x7b,
+	0xef, 0x7d, 0xdf, 0xbe, 0x1f, 0x2b, 0xb0, 0x63, 0xe9, 0x86, 0x6a, 0x60, 0x0f, 0xa9, 0xc6, 0xdc,
+	0x42, 0x0e, 0x55, 0x17, 0x3d, 0x95, 0x7e, 0xa3, 0xb8, 0x1e, 0xa6, 0x18, 0x42, 0x4b, 0x37, 0x94,
+	0xa5, 0x51, 0xe1, 0x46, 0x65, 0xd1, 0x93, 0xb7, 0x35, 0xdb, 0x72, 0xb0, 0xca, 0x7e, 0x39, 0x4c,
+	0x7e, 0x61, 0x60, 0x62, 0x63, 0xa2, 0xda, 0xc4, 0x5c, 0xba, 0xdb, 0xc4, 0x14, 0x86, 0x5d, 0x61,
+	0xf0, 0x5d, 0xd3, 0xd3, 0xa6, 0x48, 0x5d, 0xf4, 0x74, 0x44, 0xb5, 0x5e, 0xf0, 0x2c, 0x50, 0x35,
+	0x13, 0x9b, 0x98, 0xfd, 0x55, 0x97, 0xff, 0xc4, 0xdb, 0x97, 0x26, 0xc6, 0xe6, 0x1c, 0xa9, 0xec,
+	0x49, 0xf7, 0x67, 0xaa, 0xe6, 0x5c, 0x08, 0x53, 0x33, 0x85, 0xb3, 0x20, 0xc8, 0x00, 0xed, 0x5f,
+	0x25, 0x50, 0x1d, 0x12, 0x73, 0xe0, 0x21, 0x8d, 0xa2, 0x01, 0xb3, 0xc0, 0xf7, 0x41, 0x85, 0x63,
+	0x26, 0x84, 0x6a, 0x14, 0xd5, 0xa5, 0x96, 0xb4, 0xb7, 0xd5, 0xaf, 0x29, 0x3c, 0x8d, 0x12, 0xa4,
+	0x51, 0x8e, 0x9c, 0x8b, 0xd1, 0x16, 0x47, 0x8e, 0x97, 0x40, 0xf8, 0x31, 0xa8, 0x1a, 0xd8, 0x21,
+	0xc8, 0x21, 0x3e, 0x11, 0xbe, 0xc5, 0x1c, 0xdf, 0x27, 0x21, 0x98, 0xbb, 0x3f, 0x07, 0x65, 0x62,
+	0x99, 0x0e, 0xf2, 0xea, 0x1b, 0x2d, 0x69, 0x6f, 0x73, 0x24, 0x9e, 0x0e, 0xab, 0xdf, 0xff, 0xd2,
+	0x2c, 0x7c, 0x77, 0x77, 0xd9, 0x11, 0x2f, 0xda, 0x1f, 0x81, 0x17, 0x09, 0xce, 0x23, 0x44, 0xdc,
+	0x65, 0x30, 0xb8, 0x03, 0x36, 0x05, 0x77, 0x6b, 0xca, 0x88, 0x6f, 0x8e, 0x5e, 0xe3, 0x2f, 0x4e,
+	0xa6, 0x87, 0xa5, 0x65, 0xa0, 0xf6, 0x4f, 0x5c, 0xf2, 0x67, 0xee, 0xf4, 0x5e, 0x72, 0x9e, 0x1b,
+	0xfc, 0x10, 0x3c, 0x11, 0x46, 0x1b, 0x11, 0xa2, 0x99, 0xf9, 0xaa, 0x1e, 0x73, 0xec, 0x90, 0x43,
+	0xd7, 0x17, 0xf5, 0x92, 0x89, 0x8a, 0xb2, 0x0a, 0x44, 0xb5, 0xff, 0x28, 0x82, 0xd7, 0x99, 0x8d,
+	0xf5, 0xc2, 0x3a, 0x94, 0x93, 0x25, 0x2c, 0xfe, 0x8f, 0x12, 0x6e, 0xfc, 0x87, 0x12, 0x76, 0x41,
+	0xcd, 0xf5, 0x30, 0x9e, 0x4d, 0x44, 0xdf, 0x4e, 0x78, 0xec, 0x7a, 0xa9, 0x25, 0xed, 0x55, 0x46,
+	0x90, 0xd9, 0xe2, 0x32, 0x8e, 0xc0, 0xab, 0x84, 0x47, 0x22, 0xfd, 0x23, 0xe6, 0x2a, 0xc7, 0x5c,
+	0xb3, 0xfa, 0xa6, 0x9c, 0x7f, 0xc4, 0x32, 0xa8, 0x27, 0x8f, 0x31, 0x3c, 0xe3, 0x9f, 0x25, 0xf0,
+	0x6c, 0x48, 0xcc, 0xb1, 0xaf, 0xdb, 0x16, 0x1d, 0x5a, 0x44, 0x47, 0xe7, 0xda, 0xc2, 0xc2, 0xbe,
+	0x97, 0x7f, 0xd0, 0x07, 0xa0, 0x62, 0x47, 0xc0, 0xb9, 0x07, 0x1d, 0x43, 0x66, 0x36, 0xc6, 0x76,
+	0x82, 0x75, 0x5d, 0x6a, 0x37, 0xc1, 0xab, 0x54, 0x6a, 0x21, 0xf9, 0xdf, 0x24, 0xd6, 0x20, 0x23,
+	0x64, 0xe0, 0x05, 0xf2, 0xc4, 0xc9, 0x76, 0xc0, 0x36, 0xf1, 0xf5, 0x2f, 0x91, 0x41, 0x27, 0x49,
+	0xfe, 0x55, 0x61, 0x18, 0x04, 0x32, 0xba, 0xa0, 0x46, 0x7c, 0x9d, 0x50, 0x8b, 0xfa, 0x14, 0x45,
+	0xe0, 0x45, 0x06, 0x87, 0xf7, 0xb6, 0xd0, 0x23, 0x8b, 0xbe, 0x9a, 0xa0, 0xff, 0xc3, 0xdd, 0x65,
+	0x67, 0x87, 0x2f, 0xb7, 0x7d, 0x32, 0xfd, 0x4a, 0x4d, 0xd2, 0x14, 0x45, 0x89, 0xbd, 0x0b, 0x75,
+	0xfd, 0xce, 0x8b, 0x72, 0x72, 0x3c, 0x18, 0xe3, 0x19, 0xfd, 0x5a, 0xf3, 0x90, 0x28, 0x1e, 0x7c,
+	0x0f, 0x94, 0xdc, 0xb9, 0xe6, 0x88, 0xdd, 0xf4, 0x86, 0xc2, 0x33, 0x28, 0xc1, 0xba, 0x14, 0xeb,
+	0x53, 0x39, 0x9d, 0x6b, 0xce, 0x71, 0xe9, 0xea, 0xaf, 0x66, 0x61, 0xc4, 0xf0, 0xf0, 0x53, 0xf0,
+	0x4c, 0x60, 0xa6, 0x93, 0xb5, 0x27, 0xe4, 0x69, 0xe0, 0x32, 0x88, 0x4c, 0x4a, 0xd6, 0x01, 0x6c,
+	0x45, 0x3b, 0x8e, 0x57, 0x6e, 0x95, 0x7f, 0xa8, 0x90, 0x46, 0x76, 0xd1, 0xa9, 0xe6, 0x69, 0x36,
+	0x89, 0x04, 0x96, 0xa2, 0x81, 0xe1, 0x01, 0x28, 0xbb, 0x0c, 0x21, 0xb8, 0xca, 0xca, 0xea, 0x9d,
+	0xa3, 0xf0, 0x18, 0x42, 0xb2, 0xc0, 0xe7, 0xef, 0x1a, 0xee, 0x11, 0x12, 0xfa, 0x02, 0x3c, 0x1f,
+	0x12, 0xf3, 0x13, 0x34, 0x47, 0x41, 0xb1, 0xd9, 0x9e, 0xc5, 0x0f, 0xcc, 0xc1, 0x3d, 0xe9, 0x62,
+	0xfe, 0x0c, 0xb6, 0x40, 0x23, 0x3d, 0x7e, 0xc0, 0xa0, 0xff, 0x4f, 0x19, 0x6c, 0x0c, 0x89, 0x09,
+	0xcf, 0x40, 0x25, 0x76, 0x2d, 0xbd, 0x99, 0xa6, 0x37, 0x71, 0x0f, 0xc8, 0x6f, 0xaf, 0x01, 0x0a,
+	0x2f, 0x8b, 0x33, 0x50, 0x89, 0xdd, 0x02, 0x59, 0x19, 0xa2, 0xa0, 0xcc, 0x0c, 0x69, 0x9b, 0x1b,
+	0x1a, 0xe0, 0x71, 0x7c, 0xdd, 0xed, 0x66, 0x7a, 0x47, 0x50, 0xf2, 0x3b, 0xeb, 0xa0, 0xc2, 0x24,
+	0x1e, 0x80, 0x29, 0x6b, 0xeb, 0xad, 0x8c, 0x18, 0xab, 0x50, 0xb9, 0xb7, 0x36, 0x34, 0x2a, 0x2c,
+	0xbe, 0x6d, 0xb2, 0x84, 0xc5, 0x50, 0x99, 0xc2, 0x52, 0xc7, 0x7f, 0x29, 0x2c, 0x65, 0xf4, 0xb3,
+	0x84, 0xad, 0x42, 0x33, 0x85, 0x65, 0x0f, 0x24, 0x9c, 0x01, 0x18, 0xad, 0xa4, 0x98, 0xc9, 0xfc,
+	0xce, 0xe0, 0xa0, 0x07, 0x3a, 0x23, 0x3e, 0x67, 0xd0, 0x07, 0x4f, 0xd3, 0x86, 0xac, 0x93, 0x11,
+	0x23, 0x05, 0x2b, 0xf7, 0xd7, 0xc7, 0x06, 0x69, 0xe5, 0x47, 0xdf, 0xde, 0x5d, 0x76, 0xa4, 0xe3,
+	0xf1, 0xd5, 0x4d, 0x43, 0xba, 0xbe, 0x69, 0x48, 0x7f, 0xdf, 0x34, 0xa4, 0x1f, 0x6f, 0x1b, 0x85,
+	0xeb, 0xdb, 0x46, 0xe1, 0xcf, 0xdb, 0x46, 0xe1, 0xf3, 0x0f, 0x4c, 0x8b, 0x9e, 0xfb, 0xba, 0x62,
+	0x60, 0x5b, 0x15, 0xdf, 0xa4, 0x96, 0x6e, 0xec, 0x9b, 0x58, 0x5d, 0xf4, 0xba, 0xaa, 0x8d, 0xa7,
+	0xfe, 0x1c, 0x11, 0xfe, 0x49, 0xd9, 0xed, 0xef, 0x8b, 0xaf, 0x4a, 0x7a, 0xe1, 0x22, 0xa2, 0x97,
+	0xd9, 0xd2, 0x7c, 0xf7, 0xdf, 0x00, 0x00, 0x00, 0xff, 0xff, 0x6e, 0xd6, 0x8e, 0x27, 0x29, 0x0b,
+	0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -438,6 +816,14 @@ type MsgClient interface {
 	UpgradeClient(ctx context.Context, in *MsgUpgradeClient, opts ...grpc.CallOption) (*MsgUpgradeClientResponse, error)
 	// SubmitMisbehaviour defines a rpc handler method for MsgSubmitMisbehaviour.
 	SubmitMisbehaviour(ctx context.Context, in *MsgSubmitMisbehaviour, opts ...grpc.CallOption) (*MsgSubmitMisbehaviourResponse, error)
+	// RecoverClient defines a rpc handler method for MsgRecoverClient.
+	RecoverClient(ctx context.Context, in *MsgRecoverClient, opts ...grpc.CallOption) (*MsgRecoverClientResponse, error)
+	// IBCSoftwareUpgrade defines a rpc handler method for MsgIBCSoftwareUpgrade.
+	IBCSoftwareUpgrade(ctx context.Context, in *MsgIBCSoftwareUpgrade, opts ...grpc.CallOption) (*MsgIBCSoftwareUpgradeResponse, error)
+	// UpdateClientParams defines a rpc handler method for MsgUpdateParams.
+	UpdateClientParams(ctx context.Context, in *MsgUpdateParams, opts ...grpc.CallOption) (*MsgUpdateParamsResponse, error)
+	// DeleteClientCreator defines a rpc handler method for MsgDeleteClientCreator.
+	DeleteClientCreator(ctx context.Context, in *MsgDeleteClientCreator, opts ...grpc.CallOption) (*MsgDeleteClientCreatorResponse, error)
 }
 
 type msgClient struct {
@@ -484,6 +870,42 @@ func (c *msgClient) SubmitMisbehaviour(ctx context.Context, in *MsgSubmitMisbeha
 	return out, nil
 }
 
+func (c *msgClient) RecoverClient(ctx context.Context, in *MsgRecoverClient, opts ...grpc.CallOption) (*MsgRecoverClientResponse, error) {
+	out := new(MsgRecoverClientResponse)
+	err := c.cc.Invoke(ctx, "/ibc.core.client.v1.Msg/RecoverClient", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) IBCSoftwareUpgrade(ctx context.Context, in *MsgIBCSoftwareUpgrade, opts ...grpc.CallOption) (*MsgIBCSoftwareUpgradeResponse, error) {
+	out := new(MsgIBCSoftwareUpgradeResponse)
+	err := c.cc.Invoke(ctx, "/ibc.core.client.v1.Msg/IBCSoftwareUpgrade", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) UpdateClientParams(ctx context.Context, in *MsgUpdateParams, opts ...grpc.CallOption) (*MsgUpdateParamsResponse, error) {
+	out := new(MsgUpdateParamsResponse)
+	err := c.cc.Invoke(ctx, "/ibc.core.client.v1.Msg/UpdateClientParams", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *msgClient) DeleteClientCreator(ctx context.Context, in *MsgDeleteClientCreator, opts ...grpc.CallOption) (*MsgDeleteClientCreatorResponse, error) {
+	out := new(MsgDeleteClientCreatorResponse)
+	err := c.cc.Invoke(ctx, "/ibc.core.client.v1.Msg/DeleteClientCreator", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MsgServer is the server API for Msg service.
 type MsgServer interface {
 	// CreateClient defines a rpc handler method for MsgCreateClient.
@@ -494,6 +916,14 @@ type MsgServer interface {
 	UpgradeClient(context.Context, *MsgUpgradeClient) (*MsgUpgradeClientResponse, error)
 	// SubmitMisbehaviour defines a rpc handler method for MsgSubmitMisbehaviour.
 	SubmitMisbehaviour(context.Context, *MsgSubmitMisbehaviour) (*MsgSubmitMisbehaviourResponse, error)
+	// RecoverClient defines a rpc handler method for MsgRecoverClient.
+	RecoverClient(context.Context, *MsgRecoverClient) (*MsgRecoverClientResponse, error)
+	// IBCSoftwareUpgrade defines a rpc handler method for MsgIBCSoftwareUpgrade.
+	IBCSoftwareUpgrade(context.Context, *MsgIBCSoftwareUpgrade) (*MsgIBCSoftwareUpgradeResponse, error)
+	// UpdateClientParams defines a rpc handler method for MsgUpdateParams.
+	UpdateClientParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
+	// DeleteClientCreator defines a rpc handler method for MsgDeleteClientCreator.
+	DeleteClientCreator(context.Context, *MsgDeleteClientCreator) (*MsgDeleteClientCreatorResponse, error)
 }
 
 // UnimplementedMsgServer can be embedded to have forward compatible implementations.
@@ -511,6 +941,18 @@ func (*UnimplementedMsgServer) UpgradeClient(ctx context.Context, req *MsgUpgrad
 }
 func (*UnimplementedMsgServer) SubmitMisbehaviour(ctx context.Context, req *MsgSubmitMisbehaviour) (*MsgSubmitMisbehaviourResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SubmitMisbehaviour not implemented")
+}
+func (*UnimplementedMsgServer) RecoverClient(ctx context.Context, req *MsgRecoverClient) (*MsgRecoverClientResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RecoverClient not implemented")
+}
+func (*UnimplementedMsgServer) IBCSoftwareUpgrade(ctx context.Context, req *MsgIBCSoftwareUpgrade) (*MsgIBCSoftwareUpgradeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method IBCSoftwareUpgrade not implemented")
+}
+func (*UnimplementedMsgServer) UpdateClientParams(ctx context.Context, req *MsgUpdateParams) (*MsgUpdateParamsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateClientParams not implemented")
+}
+func (*UnimplementedMsgServer) DeleteClientCreator(ctx context.Context, req *MsgDeleteClientCreator) (*MsgDeleteClientCreatorResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteClientCreator not implemented")
 }
 
 func RegisterMsgServer(s grpc1.Server, srv MsgServer) {
@@ -589,6 +1031,78 @@ func _Msg_SubmitMisbehaviour_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Msg_RecoverClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgRecoverClient)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).RecoverClient(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ibc.core.client.v1.Msg/RecoverClient",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).RecoverClient(ctx, req.(*MsgRecoverClient))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_IBCSoftwareUpgrade_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgIBCSoftwareUpgrade)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).IBCSoftwareUpgrade(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ibc.core.client.v1.Msg/IBCSoftwareUpgrade",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).IBCSoftwareUpgrade(ctx, req.(*MsgIBCSoftwareUpgrade))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_UpdateClientParams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgUpdateParams)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).UpdateClientParams(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ibc.core.client.v1.Msg/UpdateClientParams",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).UpdateClientParams(ctx, req.(*MsgUpdateParams))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Msg_DeleteClientCreator_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgDeleteClientCreator)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MsgServer).DeleteClientCreator(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ibc.core.client.v1.Msg/DeleteClientCreator",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MsgServer).DeleteClientCreator(ctx, req.(*MsgDeleteClientCreator))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var Msg_serviceDesc = _Msg_serviceDesc
 var _Msg_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "ibc.core.client.v1.Msg",
@@ -609,6 +1123,22 @@ var _Msg_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SubmitMisbehaviour",
 			Handler:    _Msg_SubmitMisbehaviour_Handler,
+		},
+		{
+			MethodName: "RecoverClient",
+			Handler:    _Msg_RecoverClient_Handler,
+		},
+		{
+			MethodName: "IBCSoftwareUpgrade",
+			Handler:    _Msg_IBCSoftwareUpgrade_Handler,
+		},
+		{
+			MethodName: "UpdateClientParams",
+			Handler:    _Msg_UpdateClientParams_Handler,
+		},
+		{
+			MethodName: "DeleteClientCreator",
+			Handler:    _Msg_DeleteClientCreator_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -689,6 +1219,13 @@ func (m *MsgCreateClientResponse) MarshalToSizedBuffer(dAtA []byte) (int, error)
 	_ = i
 	var l int
 	_ = l
+	if len(m.ClientId) > 0 {
+		i -= len(m.ClientId)
+		copy(dAtA[i:], m.ClientId)
+		i = encodeVarintTx(dAtA, i, uint64(len(m.ClientId)))
+		i--
+		dAtA[i] = 0xa
+	}
 	return len(dAtA) - i, nil
 }
 
@@ -934,6 +1471,271 @@ func (m *MsgSubmitMisbehaviourResponse) MarshalToSizedBuffer(dAtA []byte) (int, 
 	return len(dAtA) - i, nil
 }
 
+func (m *MsgRecoverClient) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MsgRecoverClient) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgRecoverClient) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Signer) > 0 {
+		i -= len(m.Signer)
+		copy(dAtA[i:], m.Signer)
+		i = encodeVarintTx(dAtA, i, uint64(len(m.Signer)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.SubstituteClientId) > 0 {
+		i -= len(m.SubstituteClientId)
+		copy(dAtA[i:], m.SubstituteClientId)
+		i = encodeVarintTx(dAtA, i, uint64(len(m.SubstituteClientId)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.SubjectClientId) > 0 {
+		i -= len(m.SubjectClientId)
+		copy(dAtA[i:], m.SubjectClientId)
+		i = encodeVarintTx(dAtA, i, uint64(len(m.SubjectClientId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *MsgRecoverClientResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MsgRecoverClientResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgRecoverClientResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
+func (m *MsgIBCSoftwareUpgrade) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MsgIBCSoftwareUpgrade) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgIBCSoftwareUpgrade) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Signer) > 0 {
+		i -= len(m.Signer)
+		copy(dAtA[i:], m.Signer)
+		i = encodeVarintTx(dAtA, i, uint64(len(m.Signer)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if m.UpgradedClientState != nil {
+		{
+			size, err := m.UpgradedClientState.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintTx(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
+	}
+	{
+		size, err := m.Plan.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintTx(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
+func (m *MsgIBCSoftwareUpgradeResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MsgIBCSoftwareUpgradeResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgIBCSoftwareUpgradeResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
+func (m *MsgUpdateParams) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MsgUpdateParams) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgUpdateParams) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	{
+		size, err := m.Params.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintTx(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0x12
+	if len(m.Signer) > 0 {
+		i -= len(m.Signer)
+		copy(dAtA[i:], m.Signer)
+		i = encodeVarintTx(dAtA, i, uint64(len(m.Signer)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *MsgUpdateParamsResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MsgUpdateParamsResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgUpdateParamsResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
+func (m *MsgDeleteClientCreator) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MsgDeleteClientCreator) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgDeleteClientCreator) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Signer) > 0 {
+		i -= len(m.Signer)
+		copy(dAtA[i:], m.Signer)
+		i = encodeVarintTx(dAtA, i, uint64(len(m.Signer)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.ClientId) > 0 {
+		i -= len(m.ClientId)
+		copy(dAtA[i:], m.ClientId)
+		i = encodeVarintTx(dAtA, i, uint64(len(m.ClientId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *MsgDeleteClientCreatorResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MsgDeleteClientCreatorResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MsgDeleteClientCreatorResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	return len(dAtA) - i, nil
+}
+
 func encodeVarintTx(dAtA []byte, offset int, v uint64) int {
 	offset -= sovTx(v)
 	base := offset
@@ -972,6 +1774,10 @@ func (m *MsgCreateClientResponse) Size() (n int) {
 	}
 	var l int
 	_ = l
+	l = len(m.ClientId)
+	if l > 0 {
+		n += 1 + l + sovTx(uint64(l))
+	}
 	return n
 }
 
@@ -1069,6 +1875,114 @@ func (m *MsgSubmitMisbehaviour) Size() (n int) {
 }
 
 func (m *MsgSubmitMisbehaviourResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *MsgRecoverClient) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.SubjectClientId)
+	if l > 0 {
+		n += 1 + l + sovTx(uint64(l))
+	}
+	l = len(m.SubstituteClientId)
+	if l > 0 {
+		n += 1 + l + sovTx(uint64(l))
+	}
+	l = len(m.Signer)
+	if l > 0 {
+		n += 1 + l + sovTx(uint64(l))
+	}
+	return n
+}
+
+func (m *MsgRecoverClientResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *MsgIBCSoftwareUpgrade) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = m.Plan.Size()
+	n += 1 + l + sovTx(uint64(l))
+	if m.UpgradedClientState != nil {
+		l = m.UpgradedClientState.Size()
+		n += 1 + l + sovTx(uint64(l))
+	}
+	l = len(m.Signer)
+	if l > 0 {
+		n += 1 + l + sovTx(uint64(l))
+	}
+	return n
+}
+
+func (m *MsgIBCSoftwareUpgradeResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *MsgUpdateParams) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Signer)
+	if l > 0 {
+		n += 1 + l + sovTx(uint64(l))
+	}
+	l = m.Params.Size()
+	n += 1 + l + sovTx(uint64(l))
+	return n
+}
+
+func (m *MsgUpdateParamsResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	return n
+}
+
+func (m *MsgDeleteClientCreator) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ClientId)
+	if l > 0 {
+		n += 1 + l + sovTx(uint64(l))
+	}
+	l = len(m.Signer)
+	if l > 0 {
+		n += 1 + l + sovTx(uint64(l))
+	}
+	return n
+}
+
+func (m *MsgDeleteClientCreatorResponse) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -1266,6 +2180,38 @@ func (m *MsgCreateClientResponse) Unmarshal(dAtA []byte) error {
 			return fmt.Errorf("proto: MsgCreateClientResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ClientId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTx
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTx
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTx
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ClientId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipTx(dAtA[iNdEx:])
@@ -1968,6 +2914,732 @@ func (m *MsgSubmitMisbehaviourResponse) Unmarshal(dAtA []byte) error {
 		}
 		if fieldNum <= 0 {
 			return fmt.Errorf("proto: MsgSubmitMisbehaviourResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTx(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthTx
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MsgRecoverClient) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTx
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MsgRecoverClient: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MsgRecoverClient: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SubjectClientId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTx
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTx
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTx
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.SubjectClientId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SubstituteClientId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTx
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTx
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTx
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.SubstituteClientId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Signer", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTx
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTx
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTx
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Signer = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTx(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthTx
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MsgRecoverClientResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTx
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MsgRecoverClientResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MsgRecoverClientResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTx(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthTx
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MsgIBCSoftwareUpgrade) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTx
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MsgIBCSoftwareUpgrade: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MsgIBCSoftwareUpgrade: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Plan", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTx
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthTx
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthTx
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.Plan.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field UpgradedClientState", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTx
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthTx
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthTx
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.UpgradedClientState == nil {
+				m.UpgradedClientState = &types.Any{}
+			}
+			if err := m.UpgradedClientState.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Signer", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTx
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTx
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTx
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Signer = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTx(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthTx
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MsgIBCSoftwareUpgradeResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTx
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MsgIBCSoftwareUpgradeResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MsgIBCSoftwareUpgradeResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTx(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthTx
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MsgUpdateParams) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTx
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MsgUpdateParams: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MsgUpdateParams: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Signer", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTx
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTx
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTx
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Signer = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Params", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTx
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthTx
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthTx
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.Params.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTx(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthTx
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MsgUpdateParamsResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTx
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MsgUpdateParamsResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MsgUpdateParamsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTx(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthTx
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MsgDeleteClientCreator) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTx
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MsgDeleteClientCreator: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MsgDeleteClientCreator: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ClientId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTx
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTx
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTx
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ClientId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Signer", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTx
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTx
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTx
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Signer = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipTx(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthTx
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MsgDeleteClientCreatorResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowTx
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MsgDeleteClientCreatorResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MsgDeleteClientCreatorResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		default:

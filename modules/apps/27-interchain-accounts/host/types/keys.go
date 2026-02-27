@@ -1,6 +1,8 @@
 package types
 
 import (
+	"slices"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -10,6 +12,9 @@ const (
 
 	// StoreKey is the store key string for the interchain accounts host module
 	StoreKey = SubModuleName
+
+	// ParamsKey is the key to use for the storing params.
+	ParamsKey = "params"
 
 	// AllowAllHostMsgs holds the string key that allows all message types on interchain accounts host module
 	AllowAllHostMsgs = "*"
@@ -22,11 +27,5 @@ func ContainsMsgType(allowMsgs []string, msg sdk.Msg) bool {
 		return true
 	}
 
-	for _, v := range allowMsgs {
-		if v == sdk.MsgTypeURL(msg) {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(allowMsgs, sdk.MsgTypeURL(msg))
 }

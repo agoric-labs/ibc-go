@@ -2,11 +2,10 @@ package types
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
 
-	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
-	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
-	"github.com/cosmos/ibc-go/v7/modules/core/exported"
+	clienttypes "github.com/cosmos/ibc-go/v10/modules/core/02-client/types"
+	channeltypes "github.com/cosmos/ibc-go/v10/modules/core/04-channel/types"
+	"github.com/cosmos/ibc-go/v10/modules/core/exported"
 )
 
 // IBCModule defines an interface that implements all the callbacks
@@ -28,7 +27,6 @@ type IBCModule interface {
 		connectionHops []string,
 		portID string,
 		channelID string,
-		channelCap *capabilitytypes.Capability,
 		counterparty channeltypes.Counterparty,
 		version string,
 	) (string, error)
@@ -47,7 +45,6 @@ type IBCModule interface {
 		connectionHops []string,
 		portID,
 		channelID string,
-		channelCap *capabilitytypes.Capability,
 		counterparty channeltypes.Counterparty,
 		counterpartyVersion string,
 	) (version string, err error)
@@ -88,12 +85,14 @@ type IBCModule interface {
 	// and the acknowledgement is written (in synchronous cases).
 	OnRecvPacket(
 		ctx sdk.Context,
+		channelVersion string,
 		packet channeltypes.Packet,
 		relayer sdk.AccAddress,
 	) exported.Acknowledgement
 
 	OnAcknowledgementPacket(
 		ctx sdk.Context,
+		channelVersion string,
 		packet channeltypes.Packet,
 		acknowledgement []byte,
 		relayer sdk.AccAddress,
@@ -101,6 +100,7 @@ type IBCModule interface {
 
 	OnTimeoutPacket(
 		ctx sdk.Context,
+		channelVersion string,
 		packet channeltypes.Packet,
 		relayer sdk.AccAddress,
 	) error
@@ -110,7 +110,6 @@ type IBCModule interface {
 type ICS4Wrapper interface {
 	SendPacket(
 		ctx sdk.Context,
-		chanCap *capabilitytypes.Capability,
 		sourcePort string,
 		sourceChannel string,
 		timeoutHeight clienttypes.Height,
@@ -120,7 +119,6 @@ type ICS4Wrapper interface {
 
 	WriteAcknowledgement(
 		ctx sdk.Context,
-		chanCap *capabilitytypes.Capability,
 		packet exported.PacketI,
 		ack exported.Acknowledgement,
 	) error
@@ -143,5 +141,7 @@ type Middleware interface {
 // request the packet data to be unmarshaled by the base application.
 type PacketDataUnmarshaler interface {
 	// UnmarshalPacketData unmarshals the packet data into a concrete type
-	UnmarshalPacketData([]byte) (interface{}, error)
+	// ctx, portID, channelID are provided as arguments, so that (if needed)
+	// the packet data can be unmarshaled based on the channel version.
+	UnmarshalPacketData(ctx sdk.Context, portID string, channelID string, bz []byte) (any, string, error)
 }

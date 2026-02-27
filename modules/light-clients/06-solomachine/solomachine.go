@@ -6,10 +6,10 @@ import (
 )
 
 // Interface implementation checks.
-var _, _, _, _ codectypes.UnpackInterfacesMessage = &ClientState{}, &ConsensusState{}, &Header{}, &HeaderData{}
+var _, _, _, _ codectypes.UnpackInterfacesMessage = (*ClientState)(nil), (*ConsensusState)(nil), (*Header)(nil), (*HeaderData)(nil)
 
 // Data is an interface used for all the signature data bytes proto definitions.
-type Data interface{}
+type Data any
 
 // UnpackInterfaces implements the UnpackInterfaceMessages.UnpackInterfaces method
 func (cs ClientState) UnpackInterfaces(unpacker codectypes.AnyUnpacker) error {
