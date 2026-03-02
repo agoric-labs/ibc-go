@@ -1,0 +1,58 @@
+go 1.23.8
+
+toolchain go1.24.1
+
+use (
+	.
+	./e2e
+	./modules/light-clients/08-wasm
+	./simapp
+)
+
+replace github.com/cometbft/cometbft => ../cometbft
+
+replace cosmossdk.io/api => ../cosmos-sdk/api
+
+replace cosmossdk.io/client/v2 => ../cosmos-sdk/client/v2
+
+replace cosmossdk.io/collections => ../cosmos-sdk/collections
+
+replace cosmossdk.io/core => ../cosmos-sdk/core
+
+replace cosmossdk.io/depinject => ../cosmos-sdk/depinject
+
+replace cosmossdk.io/errors => ../cosmos-sdk/errors
+
+replace github.com/cosmos/cosmos-sdk => ../cosmos-sdk
+
+replace cosmossdk.io/log => ../cosmos-sdk/log
+
+replace cosmossdk.io/math => ../cosmos-sdk/math
+
+replace cosmossdk.io/simapp => ../cosmos-sdk/simapp
+
+replace cosmossdk.io/store => ../cosmos-sdk/store
+
+replace cosmossdk.io/systemtests => ../cosmos-sdk/systemtests
+
+replace github.com/cosmos/cosmos-sdk/tests => ../cosmos-sdk/tests
+
+replace cosmossdk.io/tests/systemtests => ../cosmos-sdk/tests/systemtests
+
+replace cosmossdk.io/tools/benchmark => ../cosmos-sdk/tools/benchmark
+
+replace cosmossdk.io/tools/confix => ../cosmos-sdk/tools/confix
+
+replace cosmossdk.io/tools/cosmovisor => ../cosmos-sdk/tools/cosmovisor
+
+replace cosmossdk.io/x/circuit => ../cosmos-sdk/x/circuit
+
+replace cosmossdk.io/x/evidence => ../cosmos-sdk/x/evidence
+
+replace cosmossdk.io/x/feegrant => ../cosmos-sdk/x/feegrant
+
+replace cosmossdk.io/x/nft => ../cosmos-sdk/x/nft
+
+replace cosmossdk.io/x/tx => ../cosmos-sdk/x/tx
+
+replace cosmossdk.io/x/upgrade => ../cosmos-sdk/x/upgrade
