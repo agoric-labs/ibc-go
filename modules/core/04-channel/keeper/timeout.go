@@ -259,3 +259,15 @@ func (k *Keeper) TimeoutOnClose(
 
 	return channel.Version, nil
 }
+
+// TimeoutExecuted is called by a module in order to execute the timeout of a
+// packet after it has been verified that the packet has timed out. This
+// function will delete the packet commitment from the store and, if the channel
+// is ORDERED, close the channel.
+func (k *Keeper) TimeoutExecuted(ctx sdk.Context, packet types.Packet) error {
+	channel, found := k.GetChannel(ctx, packet.GetSourcePort(), packet.GetSourceChannel())
+	if !found {
+		return errorsmod.Wrapf(types.ErrChannelNotFound, "port ID (%s) channel ID (%s)", packet.GetSourcePort(), packet.GetSourceChannel())
+	}
+	return k.timeoutExecuted(ctx, channel, packet)
+}
