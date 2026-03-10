@@ -8,12 +8,23 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
+// PortRouter defines the read and lifecycle methods the port keeper depends on.
+type PortRouter interface {
+	Route(module string) (IBCModule, bool)
+	HasRoute(module string) bool
+	Keys() []string
+	Seal()
+	Sealed() bool
+}
+
 // The router is a map from module name to the IBCModule
 // which contains all the module-defined callbacks required by ICS-26
 type Router struct {
 	routes map[string]IBCModule
 	sealed bool
 }
+
+var _ PortRouter = (*Router)(nil)
 
 func NewRouter() *Router {
 	return &Router{

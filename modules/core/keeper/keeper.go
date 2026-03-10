@@ -75,7 +75,7 @@ func (k *Keeper) Codec() codec.BinaryCodec {
 
 // SetRouter sets the Router in IBC Keeper and seals it. The method panics if
 // there is an existing router that's already sealed.
-func (k *Keeper) SetRouter(rtr *porttypes.Router) {
+func (k *Keeper) SetRouter(rtr porttypes.PortRouter) {
 	if k.PortKeeper.Router != nil && k.PortKeeper.Router.Sealed() {
 		panic(errors.New("cannot reset a sealed router"))
 	}

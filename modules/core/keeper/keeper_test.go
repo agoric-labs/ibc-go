@@ -10,6 +10,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/runtime"
 
 	clienttypes "github.com/cosmos/ibc-go/v10/modules/core/02-client/types"
+	portkeeper "github.com/cosmos/ibc-go/v10/modules/core/05-port/keeper"
+	porttypes "github.com/cosmos/ibc-go/v10/modules/core/05-port/types"
 	ibcexported "github.com/cosmos/ibc-go/v10/modules/core/exported"
 	ibckeeper "github.com/cosmos/ibc-go/v10/modules/core/keeper"
 	ibctesting "github.com/cosmos/ibc-go/v10/testing"
@@ -38,6 +40,30 @@ func (suite *KeeperTestSuite) SetupTest() {
 
 func TestKeeperTestSuite(t *testing.T) {
 	testifysuite.Run(t, new(KeeperTestSuite))
+}
+
+type portRouterStub struct {
+	sealed bool
+}
+
+func (r *portRouterStub) Route(string) (porttypes.IBCModule, bool) {
+	return nil, false
+}
+
+func (r *portRouterStub) HasRoute(string) bool {
+	return false
+}
+
+func (r *portRouterStub) Keys() []string {
+	return nil
+}
+
+func (r *portRouterStub) Seal() {
+	r.sealed = true
+}
+
+func (r *portRouterStub) Sealed() bool {
+	return r.sealed
 }
 
 // Test ibckeeper.NewKeeper used to initialize IBCKeeper when creating an app instance.
@@ -122,4 +148,16 @@ func (suite *KeeperTestSuite) TestNewKeeper() {
 			}
 		})
 	}
+}
+
+func (suite *KeeperTestSuite) TestSetRouterAcceptsPortRouterInterface() {
+	ibcKeeper := &ibckeeper.Keeper{
+		PortKeeper: portkeeper.NewKeeper(),
+	}
+	router := &portRouterStub{}
+
+	ibcKeeper.SetRouter(router)
+
+	suite.Require().Same(router, ibcKeeper.PortKeeper.Router)
+	suite.Require().True(router.Sealed())
 }
