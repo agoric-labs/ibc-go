@@ -3,9 +3,8 @@ package types
 import (
 	"errors"
 	"fmt"
+	host "github.com/cosmos/ibc-go/v10/modules/core/24-host"
 	"sort"
-
-	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 // PortRouter defines the read and lifecycle methods the port keeper depends on.
@@ -52,8 +51,8 @@ func (rtr *Router) AddRoute(module string, cbs IBCModule) *Router {
 	if rtr.sealed {
 		panic(fmt.Errorf("router sealed; cannot register %s route callbacks", module))
 	}
-	if !sdk.IsAlphaNumeric(module) {
-		panic(errors.New("route expressions can only contain alphanumeric characters"))
+	if err := host.PortIdentifierValidator(module); err != nil {
+		panic(err)
 	}
 	if rtr.HasRoute(module) {
 		panic(fmt.Errorf("route %s has already been registered", module))
