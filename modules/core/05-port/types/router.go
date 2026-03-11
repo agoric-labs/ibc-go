@@ -4,8 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
+	host "github.com/cosmos/ibc-go/v10/modules/core/24-host"
 )
 
 // PortRouter defines the read and lifecycle methods the port keeper depends on.
@@ -46,14 +47,17 @@ func (rtr Router) Sealed() bool {
 	return rtr.sealed
 }
 
+const PortIdentifierMinLength = 2
+
 // AddRoute adds IBCModule for a given module name. It returns the Router
 // so AddRoute calls can be linked. It will panic if the Router is sealed.
 func (rtr *Router) AddRoute(module string, cbs IBCModule) *Router {
+	paddedModule := module + strings.Repeat("a", max(PortIdentifierMinLength-len(module), 0))
+	if err := host.PortIdentifierValidator(paddedModule); err != nil {
+		panic(fmt.Errorf("invalid prefix or port identifier %s: %s", module, err))
+	}
 	if rtr.sealed {
 		panic(fmt.Errorf("router sealed; cannot register %s route callbacks", module))
-	}
-	if !sdk.IsAlphaNumeric(module) {
-		panic(errors.New("route expressions can only contain alphanumeric characters"))
 	}
 	if rtr.HasRoute(module) {
 		panic(fmt.Errorf("route %s has already been registered", module))
