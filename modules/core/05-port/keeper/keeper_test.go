@@ -102,3 +102,18 @@ func (suite *KeeperTestSuite) TestRouteFallsBackToMatchingPrefix() {
 	suite.Require().True(ok)
 	suite.Require().Same(fallbackModule, route)
 }
+
+func (suite *KeeperTestSuite) TestRouteDoesNotFallbackOnNonPrefixSubstring() {
+	fallbackModule := &mockIBCModule{}
+
+	rtr := porttypes.NewRouter().
+		AddRoute("transfer", fallbackModule)
+	rtr.Seal()
+
+	k := keeper.NewKeeper()
+	k.Router = rtr
+
+	route, ok := k.Route("xtransferchannel0")
+	suite.Require().False(ok)
+	suite.Require().Nil(route)
+}

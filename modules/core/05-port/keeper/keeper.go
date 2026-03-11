@@ -38,7 +38,7 @@ func (k *Keeper) Route(module string) (types.IBCModule, bool) {
 	}
 
 	for _, prefix := range k.Router.Keys() {
-		if strings.Contains(module, prefix) {
+		if strings.HasPrefix(module, prefix) {
 			return k.Router.Route(prefix)
 		}
 	}
