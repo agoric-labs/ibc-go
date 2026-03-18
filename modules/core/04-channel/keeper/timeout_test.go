@@ -285,7 +285,7 @@ func (suite *KeeperTestSuite) TestTimeoutExecuted() {
 
 			tc.malleate()
 
-			err := suite.chainA.App.GetIBCKeeper().ChannelKeeper.TimeoutExecuted(ctx, path.EndpointA.GetChannel(), packet)
+			err := suite.chainA.App.GetIBCKeeper().ChannelKeeper.TimeoutExecuted(ctx, packet)
 			pc := suite.chainA.App.GetIBCKeeper().ChannelKeeper.GetPacketCommitment(ctx, packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence())
 
 			tc.expResult(pc, err)
