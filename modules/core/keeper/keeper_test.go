@@ -46,15 +46,15 @@ type portRouterStub struct {
 	sealed bool
 }
 
-func (r *portRouterStub) Route(string) (porttypes.IBCModule, bool) {
+func (*portRouterStub) Route(string) (porttypes.IBCModule, bool) {
 	return nil, false
 }
 
-func (r *portRouterStub) HasRoute(string) bool {
+func (*portRouterStub) HasRoute(string) bool {
 	return false
 }
 
-func (r *portRouterStub) Keys() []string {
+func (*portRouterStub) Keys() []string {
 	return nil
 }
 
