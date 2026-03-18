@@ -62,8 +62,8 @@ dependency-graph.png
 tmp/
 *.wasm
 # Go
-go.work
-go.work.sum
+#go.work
+#go.work.sum
 
 # Python
 venv
