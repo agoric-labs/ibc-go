@@ -400,7 +400,7 @@ func LoadConfig() TestConfig {
 func getConfig() TestConfig {
 	fileTc, foundFile := fromFile()
 	if !foundFile {
-		return fromEnv()
+		return populateDefaults(fromEnv())
 	}
 
 	testCfg := applyEnvironmentVariableOverrides(fileTc)
@@ -464,7 +464,7 @@ func populateDefaults(tc TestConfig) TestConfig {
 		tc.ActiveRelayer = relayer.Hermes
 	}
 
-	if tc.RelayerConfigs == nil {
+	if tc.RelayerConfigs == nil { // len(...) == 0
 		tc.RelayerConfigs = []relayer.Config{
 			getDefaultRlyRelayerConfig(),
 			getDefaultHermesRelayerConfig(),
