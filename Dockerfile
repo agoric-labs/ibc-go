@@ -19,8 +19,8 @@ ADD LICENSE LICENSE
 COPY contrib/devtools/Makefile contrib/devtools/Makefile
 COPY Makefile .
 
-COPY go.mod .
-COPY go.sum .
+COPY go.* .
+RUN test ! -f go.work || go work edit -dropuse './e2e'
 
 RUN go mod download
 

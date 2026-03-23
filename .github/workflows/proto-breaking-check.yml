@@ -9,7 +9,6 @@ on:
 
 jobs:
   proto-breaking-check:
-    if: ${{ github.event_name != 'pull_request' || !startsWith(github.head_ref, 'merge-') }}
     runs-on: depot-ubuntu-22.04-4
     steps:
       - uses: actions/checkout@v4
