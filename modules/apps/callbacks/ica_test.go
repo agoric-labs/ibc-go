@@ -11,11 +11,12 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
-	"github.com/cosmos/ibc-go/modules/apps/callbacks/types"
-	icacontrollertypes "github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/controller/types"
-	icahosttypes "github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/host/types"
-	icatypes "github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/types"
-	ibctesting "github.com/cosmos/ibc-go/v7/testing"
+	icacontrollertypes "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/controller/types"
+	icahosttypes "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/host/types"
+	icatypes "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/types"
+	"github.com/cosmos/ibc-go/v10/modules/apps/callbacks/testing/simapp"
+	"github.com/cosmos/ibc-go/v10/modules/apps/callbacks/types"
+	ibctesting "github.com/cosmos/ibc-go/v10/testing"
 )
 
 func (s *CallbacksTestSuite) TestICACallbacks() {
@@ -34,25 +35,25 @@ func (s *CallbacksTestSuite) TestICACallbacks() {
 		},
 		{
 			"success: dest callback",
-			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, callbackAddr),
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, simapp.SuccessContract),
 			"none",
 			true,
 		},
 		{
 			"success: source callback",
-			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.SuccessContract),
 			types.CallbackTypeAcknowledgementPacket,
 			true,
 		},
 		{
 			"success: source callback with other json fields",
-			fmt.Sprintf(`{"src_callback": {"address": "%s"}, "something_else": {}}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}, "something_else": {}}`, simapp.SuccessContract),
 			types.CallbackTypeAcknowledgementPacket,
 			true,
 		},
 		{
 			"success: source callback with malformed json",
-			fmt.Sprintf(`{"src_callback": {"address": "%s"}, malformed}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}, malformed}`, simapp.SuccessContract),
 			"none",
 			true,
 		},
@@ -64,7 +65,13 @@ func (s *CallbacksTestSuite) TestICACallbacks() {
 		},
 		{
 			"failure: source callback with low gas (panic)",
-			fmt.Sprintf(`{"src_callback": {"address": "%s", "gas_limit": "350000"}}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.OogPanicContract),
+			types.CallbackTypeSendPacket,
+			false,
+		},
+		{
+			"failure: source callback with low gas (error)",
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.OogErrorContract),
 			types.CallbackTypeSendPacket,
 			false,
 		},
@@ -96,19 +103,25 @@ func (s *CallbacksTestSuite) TestICATimeoutCallbacks() {
 		},
 		{
 			"success: dest callback",
-			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, callbackAddr),
+			fmt.Sprintf(`{"dest_callback": {"address": "%s"}}`, simapp.SuccessContract),
 			"none",
 			true,
 		},
 		{
 			"success: source callback",
-			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.SuccessContract),
 			types.CallbackTypeTimeoutPacket,
 			true,
 		},
 		{
 			"failure: source callback with low gas (panic)",
-			fmt.Sprintf(`{"src_callback": {"address": "%s", "gas_limit": "350000"}}`, callbackAddr),
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.OogPanicContract),
+			types.CallbackTypeSendPacket,
+			false,
+		},
+		{
+			"failure: source callback with low gas (error)",
+			fmt.Sprintf(`{"src_callback": {"address": "%s"}}`, simapp.OogErrorContract),
 			types.CallbackTypeSendPacket,
 			false,
 		},
@@ -138,14 +151,14 @@ func (s *CallbacksTestSuite) ExecuteICATx(icaAddress, memo string) {
 		return // we return if send packet is rejected
 	}
 
-	packet, err := ibctesting.ParsePacketFromEvents(res.GetEvents())
+	packet, err := ibctesting.ParseV1PacketFromEvents(res.GetEvents())
 	s.Require().NoError(err)
 
 	err = s.path.RelayPacket(packet)
 	s.Require().NoError(err)
 }
 
-// ExecuteICATx sends and times out an ICA tx
+// ExecuteICATimeout sends and times out an ICA tx
 func (s *CallbacksTestSuite) ExecuteICATimeout(icaAddress, memo string) {
 	relativeTimeout := uint64(1)
 	icaOwner := s.chainA.SenderAccount.GetAddress().String()
@@ -159,7 +172,7 @@ func (s *CallbacksTestSuite) ExecuteICATimeout(icaAddress, memo string) {
 		return // we return if send packet is rejected
 	}
 
-	packet, err := ibctesting.ParsePacketFromEvents(res.GetEvents())
+	packet, err := ibctesting.ParseV1PacketFromEvents(res.GetEvents())
 	s.Require().NoError(err)
 
 	// proof query requires up to date client
@@ -184,7 +197,7 @@ func (s *CallbacksTestSuite) buildICAMsgDelegatePacketData(icaAddress string, me
 	params := icahosttypes.NewParams(true, []string{sdk.MsgTypeURL(msgDelegate)})
 	GetSimApp(s.chainB).ICAHostKeeper.SetParams(s.chainB.GetContext(), params)
 
-	data, err := icatypes.SerializeCosmosTx(GetSimApp(s.chainA).AppCodec(), []proto.Message{msgDelegate})
+	data, err := icatypes.SerializeCosmosTx(GetSimApp(s.chainA).AppCodec(), []proto.Message{msgDelegate}, icatypes.EncodingProtobuf)
 	s.Require().NoError(err)
 
 	icaPacketData := icatypes.InterchainAccountPacketData{

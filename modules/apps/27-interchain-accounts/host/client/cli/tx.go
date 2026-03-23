@@ -3,15 +3,17 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
+
+	"github.com/cosmos/gogoproto/proto"
+	"github.com/spf13/cobra"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/version"
-	"github.com/cosmos/gogoproto/proto"
-	"github.com/spf13/cobra"
 
-	icatypes "github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/types"
+	icatypes "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/types"
 )
 
 const (
@@ -80,7 +82,7 @@ otherwise the encoding flag can be used in combination with either "proto3" or "
 				return err
 			}
 
-			if encoding != icatypes.EncodingProtobuf && encoding != icatypes.EncodingProto3JSON {
+			if !slices.Contains([]string{icatypes.EncodingProtobuf, icatypes.EncodingProto3JSON}, encoding) {
 				return fmt.Errorf("unsupported encoding type: %s", encoding)
 			}
 
@@ -141,7 +143,7 @@ func convertBytesIntoProtoMessages(cdc *codec.ProtoCodec, msgBytes []byte) ([]pr
 
 // generateIcaPacketDataFromProtoMessages generates ica packet data as bytes from a given set of proto encoded sdk messages and a memo.
 func generateIcaPacketDataFromProtoMessages(cdc *codec.ProtoCodec, sdkMessages []proto.Message, memo string, encoding string) ([]byte, error) {
-	icaPacketDataBytes, err := icatypes.SerializeCosmosTxWithEncoding(cdc, sdkMessages, encoding)
+	icaPacketDataBytes, err := icatypes.SerializeCosmosTx(cdc, sdkMessages, encoding)
 	if err != nil {
 		return nil, err
 	}

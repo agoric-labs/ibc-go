@@ -4,26 +4,34 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/spf13/cobra"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/client/tx"
 	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/spf13/cobra"
 
-	"github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/controller/types"
-	icatypes "github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/types"
-	connectiontypes "github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
-	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
+	"github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/controller/types"
+	icatypes "github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/types"
+	connectiontypes "github.com/cosmos/ibc-go/v10/modules/core/03-connection/types"
+	channeltypes "github.com/cosmos/ibc-go/v10/modules/core/04-channel/types"
 )
 
 const (
 	// The controller chain channel version
 	flagVersion = "version"
 	// The channel ordering
-	flagOrdering              = "ordering"
-	flagRelativePacketTimeout = "relative-packet-timeout"
+	flagOrdering               = "ordering"
+	flagPacketTimeoutTimestamp = "packet-timeout-timestamp"
 )
+
+// defaultRelativePacketTimeoutTimestamp is the default packet timeout timestamp (in nanoseconds)
+// relative to the current block timestamp of the counterparty chain provided by the client
+// state. The timeout is disabled when set to 0. The default is currently set to a 10 minute
+// timeout.
+var defaultRelativePacketTimeoutTimestamp = uint64((time.Duration(10) * time.Minute).Nanoseconds())
 
 func newRegisterInterchainAccountCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -33,8 +41,7 @@ func newRegisterInterchainAccountCmd() *cobra.Command {
 connection id from the source chain. Connection identifier should be for the source chain 
 and the interchain account will be created on the counterparty chain. Callers are expected to 
 provide the appropriate application version string via {version} flag and the desired ordering
-via the {ordering} flag. Generates a new port identifier using the provided owner string, binds to the port identifier and claims 
-the associated capability.`),
+via the {ordering} flag. Generates a new port identifier using the provided owner string.`),
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			clientCtx, err := client.GetClientTxContext(cmd)
@@ -49,12 +56,12 @@ the associated capability.`),
 				return err
 			}
 
-			ordering, err := parseOrdering(cmd)
+			order, err := parseOrdering(cmd)
 			if err != nil {
 				return err
 			}
 
-			msg := types.NewMsgRegisterInterchainAccountWithOrdering(connectionID, owner, version, ordering)
+			msg := types.NewMsgRegisterInterchainAccount(connectionID, owner, version, order)
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
 		},
@@ -71,9 +78,9 @@ func newSendTxCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "send-tx [connection-id] [path/to/packet_msg.json]",
 		Short: "Send an interchain account tx on the provided connection.",
-		Long: strings.TrimSpace(`Submits pre-built packet data containing messages to be executed on the host chain 
-and attempts to send the packet. Packet data is provided as json, file or string. An 
-appropriate relative timeoutTimestamp must be provided with flag {relative-packet-timeout}`),
+		Long: strings.TrimSpace(`Submits pre-built packet data containing messages to be executed on the host chain and attempts to send the packet. 
+Packet data is provided as json, file or string. A relative timeout timestamp can be provided using the flag {packet-timeout-timestamp}. 
+An absolute timeout is calculated on chain using the current block time. If no timeout value is set then a default relative timeout value of 10 minutes is used.`),
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			clientCtx, err := client.GetClientTxContext(cmd)
@@ -89,7 +96,6 @@ appropriate relative timeoutTimestamp must be provided with flag {relative-packe
 			var icaMsgData icatypes.InterchainAccountPacketData
 			msgContentOrFileName := args[1]
 			if err := cdc.UnmarshalJSON([]byte(msgContentOrFileName), &icaMsgData); err != nil {
-
 				// check for file path if JSON input is not provided
 				contents, err := os.ReadFile(msgContentOrFileName)
 				if err != nil {
@@ -101,18 +107,18 @@ appropriate relative timeoutTimestamp must be provided with flag {relative-packe
 				}
 			}
 
-			relativeTimeoutTimestamp, err := cmd.Flags().GetUint64(flagRelativePacketTimeout)
+			timeoutTimestamp, err := cmd.Flags().GetUint64(flagPacketTimeoutTimestamp)
 			if err != nil {
 				return err
 			}
 
-			msg := types.NewMsgSendTx(owner, connectionID, relativeTimeoutTimestamp, icaMsgData)
+			msg := types.NewMsgSendTx(owner, connectionID, timeoutTimestamp, icaMsgData)
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
 		},
 	}
 
-	cmd.Flags().Uint64(flagRelativePacketTimeout, icatypes.DefaultRelativePacketTimeoutTimestamp, "Relative packet timeout in nanoseconds from now. Default is 10 minutes.")
+	cmd.Flags().Uint64(flagPacketTimeoutTimestamp, defaultRelativePacketTimeoutTimestamp, "Packet timeout timestamp in nanoseconds from now. Default is 10 minutes.")
 	flags.AddTxFlagsToCmd(cmd)
 
 	return cmd

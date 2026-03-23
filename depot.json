@@ -1,0 +1,4 @@
+{
+  "$description": "This depot.dev configuration file with the project id is used to run CI with the faster depot-* github runners, as used upstream.",
+  "id": "66g7g21fd9"
+}

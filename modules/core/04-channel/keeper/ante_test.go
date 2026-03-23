@@ -1,8 +1,8 @@
 package keeper_test
 
 import (
-	"github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
-	ibctesting "github.com/cosmos/ibc-go/v7/testing"
+	"github.com/cosmos/ibc-go/v10/modules/core/04-channel/types"
+	ibctesting "github.com/cosmos/ibc-go/v10/testing"
 )
 
 func (suite *KeeperTestSuite) TestRecvPacketReCheckTx() {
@@ -39,11 +39,10 @@ func (suite *KeeperTestSuite) TestRecvPacketReCheckTx() {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		suite.Run(tc.name, func() {
 			suite.SetupTest() // reset
 			path = ibctesting.NewPath(suite.chainA, suite.chainB)
-			suite.coordinator.Setup(path)
+			path.Setup()
 
 			sequence, err := path.EndpointA.SendPacket(defaultTimeoutHeight, disabledTimeoutTimestamp, ibctesting.MockPacketData)
 			suite.Require().NoError(err)
@@ -53,8 +52,7 @@ func (suite *KeeperTestSuite) TestRecvPacketReCheckTx() {
 
 			err = suite.chainB.App.GetIBCKeeper().ChannelKeeper.RecvPacketReCheckTx(suite.chainB.GetContext(), packet)
 
-			expPass := tc.expError == nil
-			if expPass {
+			if tc.expError == nil {
 				suite.Require().NoError(err)
 			} else {
 				suite.Require().ErrorIs(err, tc.expError)

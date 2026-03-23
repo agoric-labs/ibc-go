@@ -1,10 +1,22 @@
 package types
 
 import (
+	"errors"
 	"fmt"
+	"sort"
+	"strings"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
+	host "github.com/cosmos/ibc-go/v10/modules/core/24-host"
 )
+
+// PortRouter defines the read and lifecycle methods the port keeper depends on.
+type PortRouter interface {
+	Route(module string) (IBCModule, bool)
+	HasRoute(module string) bool
+	Keys() []string
+	Seal()
+	Sealed() bool
+}
 
 // The router is a map from module name to the IBCModule
 // which contains all the module-defined callbacks required by ICS-26
@@ -12,6 +24,8 @@ type Router struct {
 	routes map[string]IBCModule
 	sealed bool
 }
+
+var _ PortRouter = (*Router)(nil)
 
 func NewRouter() *Router {
 	return &Router{
@@ -23,7 +37,7 @@ func NewRouter() *Router {
 // Seal will panic if called more than once.
 func (rtr *Router) Seal() {
 	if rtr.sealed {
-		panic("router already sealed")
+		panic(errors.New("router already sealed"))
 	}
 	rtr.sealed = true
 }
@@ -33,17 +47,20 @@ func (rtr Router) Sealed() bool {
 	return rtr.sealed
 }
 
+const PortIdentifierMinLength = 2
+
 // AddRoute adds IBCModule for a given module name. It returns the Router
 // so AddRoute calls can be linked. It will panic if the Router is sealed.
 func (rtr *Router) AddRoute(module string, cbs IBCModule) *Router {
-	if rtr.sealed {
-		panic(fmt.Sprintf("router sealed; cannot register %s route callbacks", module))
+	paddedModule := module + strings.Repeat("a", max(PortIdentifierMinLength-len(module), 0))
+	if err := host.PortIdentifierValidator(paddedModule); err != nil {
+		panic(fmt.Errorf("invalid prefix or port identifier %s: %s", module, err))
 	}
-	if !sdk.IsAlphaNumeric(module) {
-		panic("route expressions can only contain alphanumeric characters")
+	if rtr.sealed {
+		panic(fmt.Errorf("router sealed; cannot register %s route callbacks", module))
 	}
 	if rtr.HasRoute(module) {
-		panic(fmt.Sprintf("route %s has already been registered", module))
+		panic(fmt.Errorf("route %s has already been registered", module))
 	}
 
 	rtr.routes[module] = cbs
@@ -56,10 +73,22 @@ func (rtr *Router) HasRoute(module string) bool {
 	return ok
 }
 
-// GetRoute returns a IBCModule for a given module.
-func (rtr *Router) GetRoute(module string) (IBCModule, bool) {
+// Route returns a IBCModule for a given module.
+func (rtr *Router) Route(module string) (IBCModule, bool) {
 	if !rtr.HasRoute(module) {
 		return nil, false
 	}
 	return rtr.routes[module], true
+}
+
+// Keys returns the keys of the routes map.
+func (rtr *Router) Keys() []string {
+	keys := make([]string, 0, len(rtr.routes))
+
+	for k := range rtr.routes {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+	return keys
 }

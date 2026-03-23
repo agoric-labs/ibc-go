@@ -2,23 +2,23 @@ package keeper_test
 
 import (
 	"testing"
-	"time"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	capabilitykeeper "github.com/cosmos/cosmos-sdk/x/capability/keeper"
-	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
-	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
-	upgradekeeper "github.com/cosmos/cosmos-sdk/x/upgrade/keeper"
-	"github.com/stretchr/testify/suite"
+	testifysuite "github.com/stretchr/testify/suite"
 
-	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
-	ibcexported "github.com/cosmos/ibc-go/v7/modules/core/exported"
-	ibckeeper "github.com/cosmos/ibc-go/v7/modules/core/keeper"
-	ibctesting "github.com/cosmos/ibc-go/v7/testing"
+	upgradekeeper "cosmossdk.io/x/upgrade/keeper"
+
+	"github.com/cosmos/cosmos-sdk/runtime"
+
+	clienttypes "github.com/cosmos/ibc-go/v10/modules/core/02-client/types"
+	portkeeper "github.com/cosmos/ibc-go/v10/modules/core/05-port/keeper"
+	porttypes "github.com/cosmos/ibc-go/v10/modules/core/05-port/types"
+	ibcexported "github.com/cosmos/ibc-go/v10/modules/core/exported"
+	ibckeeper "github.com/cosmos/ibc-go/v10/modules/core/keeper"
+	ibctesting "github.com/cosmos/ibc-go/v10/testing"
 )
 
 type KeeperTestSuite struct {
-	suite.Suite
+	testifysuite.Suite
 
 	coordinator *ibctesting.Coordinator
 
@@ -39,105 +39,125 @@ func (suite *KeeperTestSuite) SetupTest() {
 }
 
 func TestKeeperTestSuite(t *testing.T) {
-	suite.Run(t, new(KeeperTestSuite))
+	testifysuite.Run(t, new(KeeperTestSuite))
 }
 
-// MockStakingKeeper implements clienttypes.StakingKeeper used in ibckeeper.NewKeeper
-type MockStakingKeeper struct {
-	mockField string
+type portRouterStub struct {
+	sealed bool
 }
 
-func (d MockStakingKeeper) GetHistoricalInfo(ctx sdk.Context, height int64) (stakingtypes.HistoricalInfo, bool) {
-	return stakingtypes.HistoricalInfo{}, true
+func (*portRouterStub) Route(string) (porttypes.IBCModule, bool) {
+	return nil, false
 }
 
-func (d MockStakingKeeper) UnbondingTime(ctx sdk.Context) time.Duration {
-	return 0
+func (*portRouterStub) HasRoute(string) bool {
+	return false
+}
+
+func (*portRouterStub) Keys() []string {
+	return nil
+}
+
+func (r *portRouterStub) Seal() {
+	r.sealed = true
+}
+
+func (r *portRouterStub) Sealed() bool {
+	return r.sealed
 }
 
 // Test ibckeeper.NewKeeper used to initialize IBCKeeper when creating an app instance.
 // It verifies if ibckeeper.NewKeeper panic when any of the keepers passed in is empty.
 func (suite *KeeperTestSuite) TestNewKeeper() {
 	var (
-		stakingKeeper clienttypes.StakingKeeper
-		upgradeKeeper clienttypes.UpgradeKeeper
-		scopedKeeper  capabilitykeeper.ScopedKeeper
-		newIBCKeeper  = func() {
-			ibckeeper.NewKeeper(
-				suite.chainA.GetSimApp().AppCodec(),
-				suite.chainA.GetSimApp().GetKey(ibcexported.StoreKey),
-				suite.chainA.GetSimApp().GetSubspace(ibcexported.ModuleName),
-				stakingKeeper,
-				upgradeKeeper,
-				scopedKeeper,
-			)
-		}
+		upgradeKeeper  clienttypes.UpgradeKeeper
+		newIBCKeeperFn func()
 	)
 
 	testCases := []struct {
 		name     string
 		malleate func()
-		expPass  bool
+		expPanic string
 	}{
-		{"failure: empty staking keeper value", func() {
-			emptyStakingKeeperValue := stakingkeeper.Keeper{}
-
-			stakingKeeper = emptyStakingKeeperValue
-		}, false},
-		{"failure: empty staking keeper pointer", func() {
-			emptyStakingKeeperPointer := &stakingkeeper.Keeper{}
-
-			stakingKeeper = emptyStakingKeeperPointer
-		}, false},
-		{"failure: empty mock staking keeper", func() {
-			// use a different implementation of clienttypes.StakingKeeper
-			emptyMockStakingKeeper := MockStakingKeeper{}
-
-			stakingKeeper = emptyMockStakingKeeper
-		}, false},
-		{"failure: empty upgrade keeper value", func() {
-			emptyUpgradeKeeperValue := upgradekeeper.Keeper{}
-
-			upgradeKeeper = emptyUpgradeKeeperValue
-		}, false},
-		{"failure: empty upgrade keeper pointer", func() {
-			emptyUpgradeKeeperPointer := &upgradekeeper.Keeper{}
-
-			upgradeKeeper = emptyUpgradeKeeperPointer
-		}, false},
-		{"failure: empty scoped keeper", func() {
-			emptyScopedKeeper := capabilitykeeper.ScopedKeeper{}
-
-			scopedKeeper = emptyScopedKeeper
-		}, false},
-		{"success: replace stakingKeeper with non-empty MockStakingKeeper", func() {
-			// use a different implementation of clienttypes.StakingKeeper
-			mockStakingKeeper := MockStakingKeeper{"not empty"}
-
-			stakingKeeper = mockStakingKeeper
-		}, true},
+		{
+			name: "failure: empty upgrade keeper value",
+			malleate: func() {
+				emptyUpgradeKeeperValue := upgradekeeper.Keeper{}
+				upgradeKeeper = emptyUpgradeKeeperValue
+			},
+			expPanic: "cannot initialize IBC keeper: empty upgrade keeper",
+		},
+		{
+			name: "failure: empty upgrade keeper pointer",
+			malleate: func() {
+				emptyUpgradeKeeperPointer := &upgradekeeper.Keeper{}
+				upgradeKeeper = emptyUpgradeKeeperPointer
+			},
+			expPanic: "cannot initialize IBC keeper: empty upgrade keeper",
+		},
+		{
+			name: "failure: empty authority",
+			malleate: func() {
+				newIBCKeeperFn = func() {
+					ibckeeper.NewKeeper(
+						suite.chainA.GetSimApp().AppCodec(),
+						runtime.NewKVStoreService(suite.chainA.GetSimApp().GetKey(ibcexported.StoreKey)),
+						suite.chainA.GetSimApp().GetSubspace(ibcexported.ModuleName),
+						upgradeKeeper,
+						"", // authority
+					)
+				}
+			},
+			expPanic: "authority cannot be empty",
+		},
 	}
 
 	for _, tc := range testCases {
-		tc := tc
+
 		suite.SetupTest()
 
 		suite.Run(tc.name, func() {
-			stakingKeeper = suite.chainA.GetSimApp().StakingKeeper
+			// set default behaviour
+			newIBCKeeperFn = func() {
+				ibckeeper.NewKeeper(
+					suite.chainA.GetSimApp().AppCodec(),
+					runtime.NewKVStoreService(suite.chainA.GetSimApp().GetKey(ibcexported.StoreKey)),
+					suite.chainA.GetSimApp().GetSubspace(ibcexported.ModuleName),
+					upgradeKeeper,
+					suite.chainA.App.GetIBCKeeper().GetAuthority(),
+				)
+			}
+
 			upgradeKeeper = suite.chainA.GetSimApp().UpgradeKeeper
-			scopedKeeper = suite.chainA.GetSimApp().ScopedIBCKeeper
 
 			tc.malleate()
 
-			if tc.expPass {
-				suite.Require().NotPanics(
-					newIBCKeeper,
-				)
+			if tc.expPanic != "" {
+				suite.Require().Panics(func() {
+					newIBCKeeperFn()
+				}, "expected panic but no panic occurred")
+
+				defer func() {
+					if r := recover(); r != nil {
+						suite.Require().Contains(r.(error).Error(), tc.expPanic, "unexpected panic message")
+					}
+				}()
+
 			} else {
-				suite.Require().Panics(
-					newIBCKeeper,
-				)
+				suite.Require().NotPanics(newIBCKeeperFn, "unexpected panic occurred")
 			}
 		})
 	}
+}
+
+func (suite *KeeperTestSuite) TestSetRouterAcceptsPortRouterInterface() {
+	ibcKeeper := &ibckeeper.Keeper{
+		PortKeeper: portkeeper.NewKeeper(),
+	}
+	router := &portRouterStub{}
+
+	ibcKeeper.SetRouter(router)
+
+	suite.Require().Same(router, ibcKeeper.PortKeeper.Router)
+	suite.Require().True(router.Sealed())
 }

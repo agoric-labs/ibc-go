@@ -5,8 +5,33 @@ updates:
     schedule:
       interval: daily
     open-pull-requests-limit: 10
+
   - package-ecosystem: gomod
     directory: "/"
+    schedule:
+      interval: daily
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+
+  - package-ecosystem: gomod
+    directory: "/e2e"
+    schedule:
+      interval: daily
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+
+  - package-ecosystem: gomod
+    directory: "/modules/light-clients/08-wasm"
+    schedule:
+      interval: daily
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+
+  - package-ecosystem: gomod
+    directory: "/simapp"
     schedule:
       interval: daily
     open-pull-requests-limit: 10

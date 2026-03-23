@@ -3,13 +3,13 @@ package types
 import (
 	"encoding/json"
 	"strings"
-	"time"
+
+	errorsmod "cosmossdk.io/errors"
 
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
-	ibcexported "github.com/cosmos/ibc-go/v7/modules/core/exported"
+	ibcexported "github.com/cosmos/ibc-go/v10/modules/core/exported"
 )
 
 var (
@@ -17,37 +17,22 @@ var (
 	_ ibcexported.PacketDataProvider = (*InterchainAccountPacketData)(nil)
 )
 
-var _ ibcexported.PacketDataProvider = (*InterchainAccountPacketData)(nil)
-
 // MaxMemoCharLength defines the maximum length for the InterchainAccountPacketData memo field
-const MaxMemoCharLength = 256
-
-var (
-	// DefaultRelativePacketTimeoutHeight is the default packet timeout height (in blocks) relative
-	// to the current block height of the counterparty chain provided by the client state. The
-	// timeout is disabled when set to 0.
-	DefaultRelativePacketTimeoutHeight = "0-1000"
-
-	// DefaultRelativePacketTimeoutTimestamp is the default packet timeout timestamp (in nanoseconds)
-	// relative to the current block timestamp of the counterparty chain provided by the client
-	// state. The timeout is disabled when set to 0. The default is currently set to a 10 minute
-	// timeout.
-	DefaultRelativePacketTimeoutTimestamp = uint64((time.Duration(10) * time.Minute).Nanoseconds())
-)
+const MaxMemoCharLength = 32768
 
 // ValidateBasic performs basic validation of the interchain account packet data.
 // The memo may be empty.
 func (iapd InterchainAccountPacketData) ValidateBasic() error {
 	if iapd.Type == UNSPECIFIED {
-		return sdkerrors.Wrap(ErrInvalidOutgoingData, "packet data type cannot be unspecified")
+		return errorsmod.Wrap(ErrInvalidOutgoingData, "packet data type cannot be unspecified")
 	}
 
 	if len(iapd.Data) == 0 {
-		return sdkerrors.Wrap(ErrInvalidOutgoingData, "packet data cannot be empty")
+		return errorsmod.Wrap(ErrInvalidOutgoingData, "packet data cannot be empty")
 	}
 
 	if len(iapd.Memo) > MaxMemoCharLength {
-		return sdkerrors.Wrapf(ErrInvalidOutgoingData, "packet data memo cannot be greater than %d characters", MaxMemoCharLength)
+		return errorsmod.Wrapf(ErrInvalidOutgoingData, "packet data memo cannot be greater than %d characters", MaxMemoCharLength)
 	}
 
 	return nil
@@ -55,18 +40,18 @@ func (iapd InterchainAccountPacketData) ValidateBasic() error {
 
 // GetBytes returns the JSON marshalled interchain account packet data.
 func (iapd InterchainAccountPacketData) GetBytes() []byte {
-	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(&iapd))
+	return ModuleCdc.MustMarshalJSON(&iapd)
 }
 
-// GetBytes returns the JSON marshalled interchain account CosmosTx.
-func (ct CosmosTx) GetBytes() []byte {
-	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(&ct))
+// UnmarshalJSON unmarshals raw JSON bytes into an InterchainAccountPacketData.
+func (iapd *InterchainAccountPacketData) UnmarshalJSON(bz []byte) error {
+	return ModuleCdc.UnmarshalJSON(bz, iapd)
 }
 
 // UnpackInterfaces implements UnpackInterfacesMessage.UnpackInterfaces
 func (ct CosmosTx) UnpackInterfaces(unpacker codectypes.AnyUnpacker) error {
-	for _, any := range ct.Messages {
-		err := unpacker.UnpackAny(any, new(sdk.Msg))
+	for _, protoAny := range ct.Messages {
+		err := unpacker.UnpackAny(protoAny, new(sdk.Msg))
 		if err != nil {
 			return err
 		}
@@ -84,22 +69,22 @@ func (ct CosmosTx) UnpackInterfaces(unpacker codectypes.AnyUnpacker) error {
 //     check if the packet sender isn't the interchain accounts module.
 //   - The sender address must only be used by modules on the sending chain.
 func (InterchainAccountPacketData) GetPacketSender(sourcePortID string) string {
-	found := strings.HasPrefix(sourcePortID, ControllerPortPrefix)
+	icaOwner, found := strings.CutPrefix(sourcePortID, ControllerPortPrefix)
 	if !found {
 		return ""
 	}
-	return strings.TrimPrefix(sourcePortID, ControllerPortPrefix)
+	return icaOwner
 }
 
 // GetCustomPacketData interprets the memo field of the packet data as a JSON object
 // and returns the value associated with the given key.
 // If the key is missing or the memo is not properly formatted, then nil is returned.
-func (iapd InterchainAccountPacketData) GetCustomPacketData(key string) interface{} {
+func (iapd InterchainAccountPacketData) GetCustomPacketData(key string) any {
 	if len(iapd.Memo) == 0 {
 		return nil
 	}
 
-	jsonObject := make(map[string]interface{})
+	jsonObject := make(map[string]any)
 	err := json.Unmarshal([]byte(iapd.Memo), &jsonObject)
 	if err != nil {
 		return nil

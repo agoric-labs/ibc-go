@@ -4,12 +4,14 @@ import (
 	"reflect"
 	"time"
 
+	errorsmod "cosmossdk.io/errors"
+	storetypes "cosmossdk.io/store/types"
+
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
-	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
-	"github.com/cosmos/ibc-go/v7/modules/core/exported"
+	clienttypes "github.com/cosmos/ibc-go/v10/modules/core/02-client/types"
+	"github.com/cosmos/ibc-go/v10/modules/core/exported"
 )
 
 // CheckSubstituteAndUpdateState will try to update the client with the state of the
@@ -26,29 +28,29 @@ import (
 // the FrozenHeight to the zero Height.
 func (cs ClientState) CheckSubstituteAndUpdateState(
 	ctx sdk.Context, cdc codec.BinaryCodec, subjectClientStore,
-	substituteClientStore sdk.KVStore, substituteClient exported.ClientState,
+	substituteClientStore storetypes.KVStore, substituteClient exported.ClientState,
 ) error {
 	substituteClientState, ok := substituteClient.(*ClientState)
 	if !ok {
-		return sdkerrors.Wrapf(clienttypes.ErrInvalidClient, "expected type %T, got %T", &ClientState{}, substituteClient)
+		return errorsmod.Wrapf(clienttypes.ErrInvalidClient, "expected type %T, got %T", &ClientState{}, substituteClient)
 	}
 
 	if !IsMatchingClientState(cs, *substituteClientState) {
-		return sdkerrors.Wrap(clienttypes.ErrInvalidSubstitute, "subject client state does not match substitute client state")
+		return errorsmod.Wrap(clienttypes.ErrInvalidSubstitute, "subject client state does not match substitute client state")
 	}
 
-	if cs.Status(ctx, subjectClientStore, cdc) == exported.Frozen {
+	if cs.status(ctx, subjectClientStore, cdc) == exported.Frozen {
 		// unfreeze the client
 		cs.FrozenHeight = clienttypes.ZeroHeight()
 	}
 
 	// copy consensus states and processed time from substitute to subject
 	// starting from initial height and ending on the latest height (inclusive)
-	height := substituteClientState.GetLatestHeight()
+	height := substituteClientState.LatestHeight
 
 	consensusState, found := GetConsensusState(substituteClientStore, cdc, height)
 	if !found {
-		return sdkerrors.Wrap(clienttypes.ErrConsensusStateNotFound, "unable to retrieve latest consensus state for substitute client")
+		return errorsmod.Wrap(clienttypes.ErrConsensusStateNotFound, "unable to retrieve latest consensus state for substitute client")
 	}
 
 	setConsensusState(subjectClientStore, cdc, consensusState, height)
@@ -56,12 +58,12 @@ func (cs ClientState) CheckSubstituteAndUpdateState(
 	// set metadata stored for the substitute consensus state
 	processedHeight, found := GetProcessedHeight(substituteClientStore, height)
 	if !found {
-		return sdkerrors.Wrap(clienttypes.ErrUpdateClientFailed, "unable to retrieve processed height for substitute client latest height")
+		return errorsmod.Wrap(clienttypes.ErrUpdateClientFailed, "unable to retrieve processed height for substitute client latest height")
 	}
 
 	processedTime, found := GetProcessedTime(substituteClientStore, height)
 	if !found {
-		return sdkerrors.Wrap(clienttypes.ErrUpdateClientFailed, "unable to retrieve processed time for substitute client latest height")
+		return errorsmod.Wrap(clienttypes.ErrUpdateClientFailed, "unable to retrieve processed time for substitute client latest height")
 	}
 
 	setConsensusMetadataWithValues(subjectClientStore, height, processedHeight, processedTime)

@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/cosmos/cosmos-sdk/types/kv"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/simulation"
-	"github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/types"
-	ibctesting "github.com/cosmos/ibc-go/v7/testing"
+	"github.com/cosmos/cosmos-sdk/types/kv"
+
+	"github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/simulation"
+	"github.com/cosmos/ibc-go/v10/modules/apps/27-interchain-accounts/types"
+	ibctesting "github.com/cosmos/ibc-go/v10/testing"
 )
 
 func TestDecodeStore(t *testing.T) {
@@ -52,7 +53,6 @@ func TestDecodeStore(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		i, tt := i, tt
 		t.Run(tt.name, func(t *testing.T) {
 			if i == len(tests)-1 {
 				require.Panics(t, func() { dec(kvPairs.Pairs[i], kvPairs.Pairs[i]) }, tt.name)

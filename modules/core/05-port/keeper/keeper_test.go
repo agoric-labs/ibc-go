@@ -3,22 +3,19 @@ package keeper_test
 import (
 	"testing"
 
-	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	testifysuite "github.com/stretchr/testify/suite"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 
-	"github.com/cosmos/ibc-go/v7/modules/core/05-port/keeper"
-	"github.com/cosmos/ibc-go/v7/testing/simapp"
-)
-
-var (
-	validPort   = "validportid"
-	invalidPort = "(invalidPortID)"
+	channeltypes "github.com/cosmos/ibc-go/v10/modules/core/04-channel/types"
+	"github.com/cosmos/ibc-go/v10/modules/core/05-port/keeper"
+	porttypes "github.com/cosmos/ibc-go/v10/modules/core/05-port/types"
+	"github.com/cosmos/ibc-go/v10/modules/core/exported"
+	"github.com/cosmos/ibc-go/v10/testing/simapp"
 )
 
 type KeeperTestSuite struct {
-	suite.Suite
+	testifysuite.Suite
 
 	ctx    sdk.Context
 	keeper *keeper.Keeper
@@ -26,51 +23,97 @@ type KeeperTestSuite struct {
 
 func (suite *KeeperTestSuite) SetupTest() {
 	isCheckTx := false
-	app := simapp.Setup(isCheckTx)
+	app := simapp.Setup(suite.T(), isCheckTx)
 
-	suite.ctx = app.BaseApp.NewContext(isCheckTx, tmproto.Header{})
-	suite.keeper = &app.IBCKeeper.PortKeeper
+	suite.ctx = app.NewContext(isCheckTx)
+	suite.keeper = app.IBCKeeper.PortKeeper
 }
 
 func TestKeeperTestSuite(t *testing.T) {
-	suite.Run(t, new(KeeperTestSuite))
+	testifysuite.Run(t, new(KeeperTestSuite))
 }
 
-func (suite *KeeperTestSuite) TestBind() {
-	// Test that invalid portID causes panic
-	require.Panics(suite.T(), func() { suite.keeper.BindPort(suite.ctx, invalidPort) }, "Did not panic on invalid portID")
+type mockIBCModule struct{}
 
-	// Test that valid BindPort returns capability key
-	capKey := suite.keeper.BindPort(suite.ctx, validPort)
-	require.NotNil(suite.T(), capKey, "capabilityKey is nil on valid BindPort")
-
-	isBound := suite.keeper.IsBound(suite.ctx, validPort)
-	require.True(suite.T(), isBound, "port is bound successfully")
-
-	isNotBound := suite.keeper.IsBound(suite.ctx, "not-a-port")
-	require.False(suite.T(), isNotBound, "port is not bound")
-
-	// Test that rebinding the same portid causes panic
-	require.Panics(suite.T(), func() { suite.keeper.BindPort(suite.ctx, validPort) }, "did not panic on re-binding the same port")
+func (mockIBCModule) OnChanOpenInit(sdk.Context, channeltypes.Order, []string, string, string, channeltypes.Counterparty, string) (string, error) {
+	return "", nil
 }
 
-func (suite *KeeperTestSuite) TestAuthenticate() {
-	capKey := suite.keeper.BindPort(suite.ctx, validPort)
+func (mockIBCModule) OnChanOpenTry(sdk.Context, channeltypes.Order, []string, string, string, channeltypes.Counterparty, string) (string, error) {
+	return "", nil
+}
 
-	// Require that passing in invalid portID causes panic
-	require.Panics(suite.T(), func() { suite.keeper.Authenticate(suite.ctx, capKey, invalidPort) }, "did not panic on invalid portID")
+func (mockIBCModule) OnChanOpenAck(sdk.Context, string, string, string, string) error {
+	return nil
+}
 
-	// Valid authentication should return true
-	auth := suite.keeper.Authenticate(suite.ctx, capKey, validPort)
-	require.True(suite.T(), auth, "valid authentication failed")
+func (mockIBCModule) OnChanOpenConfirm(sdk.Context, string, string) error {
+	return nil
+}
 
-	// Test that authenticating against incorrect portid fails
-	auth = suite.keeper.Authenticate(suite.ctx, capKey, "wrongportid")
-	require.False(suite.T(), auth, "invalid authentication failed")
+func (mockIBCModule) OnChanCloseInit(sdk.Context, string, string) error {
+	return nil
+}
 
-	// Test that authenticating port against different valid
-	// capability key fails
-	capKey2 := suite.keeper.BindPort(suite.ctx, "otherportid")
-	auth = suite.keeper.Authenticate(suite.ctx, capKey2, validPort)
-	require.False(suite.T(), auth, "invalid authentication for different capKey failed")
+func (mockIBCModule) OnChanCloseConfirm(sdk.Context, string, string) error {
+	return nil
+}
+
+func (mockIBCModule) OnRecvPacket(sdk.Context, string, channeltypes.Packet, sdk.AccAddress) exported.Acknowledgement {
+	return nil
+}
+
+func (mockIBCModule) OnAcknowledgementPacket(sdk.Context, string, channeltypes.Packet, []byte, sdk.AccAddress) error {
+	return nil
+}
+
+func (mockIBCModule) OnTimeoutPacket(sdk.Context, string, channeltypes.Packet, sdk.AccAddress) error {
+	return nil
+}
+
+func (suite *KeeperTestSuite) TestRouteExactMatchPreferredOverFallback() {
+	exactModule := &mockIBCModule{}
+	fallbackModule := &mockIBCModule{}
+
+	rtr := porttypes.NewRouter().
+		AddRoute("transfer", fallbackModule).
+		AddRoute("transferchannel0", exactModule)
+	rtr.Seal()
+
+	k := keeper.NewKeeper()
+	k.Router = rtr
+
+	route, ok := k.Route("transferchannel0")
+	suite.Require().True(ok)
+	suite.Require().Same(exactModule, route)
+}
+
+func (suite *KeeperTestSuite) TestRouteFallsBackToMatchingPrefix() {
+	fallbackModule := &mockIBCModule{}
+
+	rtr := porttypes.NewRouter().
+		AddRoute("transfer", fallbackModule)
+	rtr.Seal()
+
+	k := keeper.NewKeeper()
+	k.Router = rtr
+
+	route, ok := k.Route("transferchannel0")
+	suite.Require().True(ok)
+	suite.Require().Same(fallbackModule, route)
+}
+
+func (suite *KeeperTestSuite) TestRouteDoesNotFallbackOnNonPrefixSubstring() {
+	fallbackModule := &mockIBCModule{}
+
+	rtr := porttypes.NewRouter().
+		AddRoute("transfer", fallbackModule)
+	rtr.Seal()
+
+	k := keeper.NewKeeper()
+	k.Router = rtr
+
+	route, ok := k.Route("xtransferchannel0")
+	suite.Require().False(ok)
+	suite.Require().Nil(route)
 }

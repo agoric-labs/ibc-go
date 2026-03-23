@@ -4,24 +4,25 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/cosmos/cosmos-sdk/types/kv"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cosmos/ibc-go/v7/modules/core/03-connection/simulation"
-	"github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
-	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
-	"github.com/cosmos/ibc-go/v7/testing/simapp"
+	"github.com/cosmos/cosmos-sdk/types/kv"
+
+	"github.com/cosmos/ibc-go/v10/modules/core/03-connection/simulation"
+	"github.com/cosmos/ibc-go/v10/modules/core/03-connection/types"
+	host "github.com/cosmos/ibc-go/v10/modules/core/24-host"
+	"github.com/cosmos/ibc-go/v10/testing/simapp"
 )
 
 func TestDecodeStore(t *testing.T) {
-	app := simapp.Setup(false)
+	app := simapp.Setup(t, false)
 	cdc := app.AppCodec()
 
 	connectionID := "connectionidone"
 
 	connection := types.ConnectionEnd{
 		ClientId: "clientidone",
-		Versions: types.ExportedVersionsToProto(types.GetCompatibleVersions()),
+		Versions: types.GetCompatibleVersions(),
 	}
 
 	paths := types.ClientPaths{
@@ -54,7 +55,6 @@ func TestDecodeStore(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		i, tt := i, tt
 		t.Run(tt.name, func(t *testing.T) {
 			res, found := simulation.NewDecodeStore(cdc, kvPairs.Pairs[i], kvPairs.Pairs[i])
 			if i == len(tests)-1 {

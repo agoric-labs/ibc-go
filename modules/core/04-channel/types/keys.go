@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"regexp"
 
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	errorsmod "cosmossdk.io/errors"
 
-	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
+	host "github.com/cosmos/ibc-go/v10/modules/core/24-host"
 )
 
 const (
@@ -31,7 +31,7 @@ const (
 )
 
 // FormatChannelIdentifier returns the channel identifier with the sequence appended.
-// This is a SDK specific format not enforced by IBC protocol.
+// This is an SDK specific format not enforced by IBC protocol.
 func FormatChannelIdentifier(sequence uint64) string {
 	return fmt.Sprintf("%s%d", ChannelPrefix, sequence)
 }
@@ -50,12 +50,12 @@ func IsValidChannelID(channelID string) bool {
 // ParseChannelSequence parses the channel sequence from the channel identifier.
 func ParseChannelSequence(channelID string) (uint64, error) {
 	if !IsChannelIDFormat(channelID) {
-		return 0, sdkerrors.Wrap(host.ErrInvalidID, "channel identifier is not in the format: `channel-{N}`")
+		return 0, errorsmod.Wrap(host.ErrInvalidID, "channel identifier is not in the format: `channel-{N}`")
 	}
 
 	sequence, err := host.ParseIdentifier(channelID, ChannelPrefix)
 	if err != nil {
-		return 0, sdkerrors.Wrap(err, "invalid channel identifier")
+		return 0, errorsmod.Wrap(err, "invalid channel identifier")
 	}
 
 	return sequence, nil
@@ -63,5 +63,5 @@ func ParseChannelSequence(channelID string) (uint64, error) {
 
 // FilteredPortPrefix returns the prefix key for the given port prefix.
 func FilteredPortPrefix(portPrefix string) []byte {
-	return []byte(fmt.Sprintf("%s/%s/%s", host.KeyChannelEndPrefix, host.KeyPortPrefix, portPrefix))
+	return fmt.Appendf(nil, "%s/%s/%s", host.KeyChannelEndPrefix, host.KeyPortPrefix, portPrefix)
 }

@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	errorsmod "cosmossdk.io/errors"
 )
 
 // DefaultMaxCharacterLength defines the default maximum character length used
@@ -36,21 +36,21 @@ var IsValidID = regexp.MustCompile(`^[a-zA-Z0-9\.\_\+\-\#\[\]\<\>]+$`).MatchStri
 // ValidateFn function type to validate path and identifier bytestrings
 type ValidateFn func(string) error
 
-func defaultIdentifierValidator(id string, min, max int) error {
+func defaultIdentifierValidator(id string, minLength, maxLength int) error {
 	if strings.TrimSpace(id) == "" {
-		return sdkerrors.Wrap(ErrInvalidID, "identifier cannot be blank")
+		return errorsmod.Wrap(ErrInvalidID, "identifier cannot be blank")
 	}
 	// valid id MUST NOT contain "/" separator
 	if strings.Contains(id, "/") {
-		return sdkerrors.Wrapf(ErrInvalidID, "identifier %s cannot contain separator '/'", id)
+		return errorsmod.Wrapf(ErrInvalidID, "identifier %s cannot contain separator '/'", id)
 	}
 	// valid id must fit the length requirements
-	if len(id) < min || len(id) > max {
-		return sdkerrors.Wrapf(ErrInvalidID, "identifier %s has invalid length: %d, must be between %d-%d characters", id, len(id), min, max)
+	if len(id) < minLength || len(id) > maxLength {
+		return errorsmod.Wrapf(ErrInvalidID, "identifier %s has invalid length: %d, must be between %d-%d characters", id, len(id), minLength, maxLength)
 	}
-	// valid id must contain only lower alphabetic characters
+	// valid id must contain only alphanumeric characters and some allowed symbols.
 	if !IsValidID(id) {
-		return sdkerrors.Wrapf(
+		return errorsmod.Wrapf(
 			ErrInvalidID,
 			"identifier %s must contain only alphanumeric or the following characters: '.', '_', '+', '-', '#', '[', ']', '<', '>'",
 			id,
@@ -60,10 +60,10 @@ func defaultIdentifierValidator(id string, min, max int) error {
 }
 
 // ClientIdentifierValidator is the default validator function for Client identifiers.
-// A valid Identifier must be between 9-64 characters and only contain alphanumeric and some allowed
+// A valid Identifier must be between 4-64 characters and only contain alphanumeric and some allowed
 // special characters (see IsValidID).
 func ClientIdentifierValidator(id string) error {
-	return defaultIdentifierValidator(id, 9, DefaultMaxCharacterLength)
+	return defaultIdentifierValidator(id, 4, DefaultMaxCharacterLength)
 }
 
 // ConnectionIdentifierValidator is the default validator function for Connection identifiers.
@@ -87,7 +87,7 @@ func PortIdentifierValidator(id string) error {
 	return defaultIdentifierValidator(id, 2, DefaultMaxPortCharacterLength)
 }
 
-// NewPathValidator takes in a Identifier Validator function and returns
+// NewPathValidator takes in an Identifier Validator function and returns
 // a Path Validator function which requires path to consist of `/`-separated valid identifiers,
 // where a valid identifier is between 1-64 characters, contains only alphanumeric and some allowed
 // special characters (see IsValidID), and satisfies the custom `idValidator` function.
@@ -95,13 +95,13 @@ func NewPathValidator(idValidator ValidateFn) ValidateFn {
 	return func(path string) error {
 		pathArr := strings.Split(path, "/")
 		if len(pathArr) > 0 && pathArr[0] == path {
-			return sdkerrors.Wrapf(ErrInvalidPath, "path %s doesn't contain any separator '/'", path)
+			return errorsmod.Wrapf(ErrInvalidPath, "path %s doesn't contain any separator '/'", path)
 		}
 
 		for _, p := range pathArr {
 			// a path beginning or ending in a separator returns empty string elements.
 			if p == "" {
-				return sdkerrors.Wrapf(ErrInvalidPath, "path %s cannot begin or end with '/'", path)
+				return errorsmod.Wrapf(ErrInvalidPath, "path %s cannot begin or end with '/'", path)
 			}
 
 			if err := idValidator(p); err != nil {
@@ -109,7 +109,7 @@ func NewPathValidator(idValidator ValidateFn) ValidateFn {
 			}
 			// Each path element must either be a valid identifier or constant number
 			if err := defaultIdentifierValidator(p, 1, DefaultMaxCharacterLength); err != nil {
-				return sdkerrors.Wrapf(err, "path %s contains an invalid identifier: '%s'", path, p)
+				return errorsmod.Wrapf(err, "path %s contains an invalid identifier: '%s'", path, p)
 			}
 		}
 

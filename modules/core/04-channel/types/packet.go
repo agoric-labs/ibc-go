@@ -3,20 +3,24 @@ package types
 import (
 	"crypto/sha256"
 
-	"github.com/cosmos/cosmos-sdk/codec"
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	errorsmod "cosmossdk.io/errors"
 
-	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
-	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
-	"github.com/cosmos/ibc-go/v7/modules/core/exported"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	clienttypes "github.com/cosmos/ibc-go/v10/modules/core/02-client/types"
+	host "github.com/cosmos/ibc-go/v10/modules/core/24-host"
+	"github.com/cosmos/ibc-go/v10/modules/core/exported"
 )
+
+const MaximumPayloadsSize = 262144 // 256 KiB. This is the maximum size of all payloads combined
 
 // CommitPacket returns the packet commitment bytes. The commitment consists of:
 // sha256_hash(timeout_timestamp + timeout_height.RevisionNumber + timeout_height.RevisionHeight + sha256_hash(data))
 // from a given packet. This results in a fixed length preimage.
+// NOTE: A fixed length preimage is ESSENTIAL to prevent relayers from being able
+// to malleate the packet fields and create a commitment hash that matches the original packet.
 // NOTE: sdk.Uint64ToBigEndian sets the uint64 to a slice of length 8.
-func CommitPacket(cdc codec.BinaryCodec, packet exported.PacketI) []byte {
+func CommitPacket(packet Packet) []byte {
 	timeoutHeight := packet.GetTimeoutHeight()
 
 	buf := sdk.Uint64ToBigEndian(packet.GetTimeoutTimestamp())
@@ -39,8 +43,6 @@ func CommitAcknowledgement(data []byte) []byte {
 	hash := sha256.Sum256(data)
 	return hash[:]
 }
-
-var _ exported.PacketI = (*Packet)(nil)
 
 // NewPacket creates a new Packet instance. It panics if the provided
 // packet data interface is not registered.
@@ -89,41 +91,46 @@ func (p Packet) GetTimeoutTimestamp() uint64 { return p.TimeoutTimestamp }
 // ValidateBasic implements PacketI interface
 func (p Packet) ValidateBasic() error {
 	if err := host.PortIdentifierValidator(p.SourcePort); err != nil {
-		return sdkerrors.Wrap(err, "invalid source port ID")
+		return errorsmod.Wrap(err, "invalid source port ID")
 	}
 	if err := host.PortIdentifierValidator(p.DestinationPort); err != nil {
-		return sdkerrors.Wrap(err, "invalid destination port ID")
+		return errorsmod.Wrap(err, "invalid destination port ID")
 	}
 	if err := host.ChannelIdentifierValidator(p.SourceChannel); err != nil {
-		return sdkerrors.Wrap(err, "invalid source channel ID")
+		return errorsmod.Wrap(err, "invalid source channel ID")
 	}
 	if err := host.ChannelIdentifierValidator(p.DestinationChannel); err != nil {
-		return sdkerrors.Wrap(err, "invalid destination channel ID")
+		return errorsmod.Wrap(err, "invalid destination channel ID")
 	}
 	if p.Sequence == 0 {
-		return sdkerrors.Wrap(ErrInvalidPacket, "packet sequence cannot be 0")
+		return errorsmod.Wrap(ErrInvalidPacket, "packet sequence cannot be 0")
 	}
 	if p.TimeoutHeight.IsZero() && p.TimeoutTimestamp == 0 {
-		return sdkerrors.Wrap(ErrInvalidPacket, "packet timeout height and packet timeout timestamp cannot both be 0")
+		return errorsmod.Wrap(ErrInvalidPacket, "packet timeout height and packet timeout timestamp cannot both be 0")
 	}
 	if len(p.Data) == 0 {
-		return sdkerrors.Wrap(ErrInvalidPacket, "packet data bytes cannot be empty")
+		return errorsmod.Wrap(ErrInvalidPacket, "packet data bytes cannot be empty")
 	}
+
+	if len(p.Data) > MaximumPayloadsSize {
+		return errorsmod.Wrapf(ErrInvalidPacket, "packet data bytes cannot exceed %d bytes", MaximumPayloadsSize)
+	}
+
 	return nil
 }
 
 // Validates a PacketId
 func (p PacketId) Validate() error {
 	if err := host.PortIdentifierValidator(p.PortId); err != nil {
-		return sdkerrors.Wrap(err, "invalid source port ID")
+		return errorsmod.Wrap(err, "invalid source port ID")
 	}
 
 	if err := host.ChannelIdentifierValidator(p.ChannelId); err != nil {
-		return sdkerrors.Wrap(err, "invalid source channel ID")
+		return errorsmod.Wrap(err, "invalid source channel ID")
 	}
 
 	if p.Sequence == 0 {
-		return sdkerrors.Wrap(ErrInvalidPacket, "packet sequence cannot be 0")
+		return errorsmod.Wrap(ErrInvalidPacket, "packet sequence cannot be 0")
 	}
 
 	return nil

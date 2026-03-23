@@ -1,14 +1,15 @@
 package keeper
 
 import (
+	errorsmod "cosmossdk.io/errors"
+
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
-	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
-	"github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
-	commitmenttypes "github.com/cosmos/ibc-go/v7/modules/core/23-commitment/types"
-	"github.com/cosmos/ibc-go/v7/modules/core/exported"
+	clienttypes "github.com/cosmos/ibc-go/v10/modules/core/02-client/types"
+	"github.com/cosmos/ibc-go/v10/modules/core/03-connection/types"
+	commitmenttypes "github.com/cosmos/ibc-go/v10/modules/core/23-commitment/types"
+	"github.com/cosmos/ibc-go/v10/modules/core/exported"
 )
 
 // ConnOpenInit initialises a connection attempt on chain A. The generated connection identifier
@@ -16,7 +17,7 @@ import (
 //
 // NOTE: Msg validation verifies the supplied identifiers and ensures that the counterparty
 // connection identifier is empty.
-func (k Keeper) ConnOpenInit(
+func (k *Keeper) ConnOpenInit(
 	ctx sdk.Context,
 	clientID string,
 	counterparty types.Counterparty, // counterpartyPrefix, counterpartyClientIdentifier
@@ -26,19 +27,14 @@ func (k Keeper) ConnOpenInit(
 	versions := types.GetCompatibleVersions()
 	if version != nil {
 		if !types.IsSupportedVersion(types.GetCompatibleVersions(), version) {
-			return "", sdkerrors.Wrap(types.ErrInvalidVersion, "version is not supported")
+			return "", errorsmod.Wrap(types.ErrInvalidVersion, "version is not supported")
 		}
 
-		versions = []exported.Version{version}
+		versions = []*types.Version{version}
 	}
 
-	clientState, found := k.clientKeeper.GetClientState(ctx, clientID)
-	if !found {
-		return "", sdkerrors.Wrapf(clienttypes.ErrClientNotFound, "clientID (%s)", clientID)
-	}
-
-	if status := k.clientKeeper.GetClientStatus(ctx, clientState, clientID); status != exported.Active {
-		return "", sdkerrors.Wrapf(clienttypes.ErrClientNotActive, "client (%s) status is %s", clientID, status)
+	if status := k.clientKeeper.GetClientStatus(ctx, clientID); status != exported.Active {
+		return "", errorsmod.Wrapf(clienttypes.ErrClientNotActive, "client (%s) status is %s", clientID, status)
 	}
 
 	connectionID := k.GenerateConnectionIdentifier(ctx)
@@ -47,16 +43,14 @@ func (k Keeper) ConnOpenInit(
 	}
 
 	// connection defines chain A's ConnectionEnd
-	connection := types.NewConnectionEnd(types.INIT, clientID, counterparty, types.ExportedVersionsToProto(versions), delayPeriod)
+	connection := types.NewConnectionEnd(types.INIT, clientID, counterparty, versions, delayPeriod)
 	k.SetConnection(ctx, connectionID, connection)
 
-	k.Logger(ctx).Info("connection state updated", "connection-id", connectionID, "previous-state", "NONE", "new-state", "INIT")
+	k.Logger(ctx).Info("connection state updated", "connection-id", connectionID, "previous-state", types.UNINITIALIZED, "new-state", types.INIT)
 
-	defer func() {
-		telemetry.IncrCounter(1, "ibc", "connection", "open-init")
-	}()
+	defer telemetry.IncrCounter(1, "ibc", "connection", "open-init")
 
-	EmitConnectionOpenInitEvent(ctx, connectionID, clientID, counterparty)
+	emitConnectionOpenInitEvent(ctx, connectionID, clientID, counterparty)
 
 	return connectionID, nil
 }
@@ -67,18 +61,14 @@ func (k Keeper) ConnOpenInit(
 // NOTE:
 //   - Here chain A acts as the counterparty
 //   - Identifiers are checked on msg validation
-func (k Keeper) ConnOpenTry(
+func (k *Keeper) ConnOpenTry(
 	ctx sdk.Context,
 	counterparty types.Counterparty, // counterpartyConnectionIdentifier, counterpartyPrefix and counterpartyClientIdentifier
 	delayPeriod uint64,
 	clientID string, // clientID of chainA
-	_ exported.ClientState, // clientState that chainA has for chainB
-	counterpartyVersions []exported.Version, // supported versions of chain A
-	proofInit []byte, // proof that chainA stored connectionEnd in state (on ConnOpenInit)
-	_ []byte, // proof that chainA stored a light client of chainB
-	_ []byte, // proof that chainA stored chainB's consensus state at consensus height
+	counterpartyVersions []*types.Version, // supported versions of chain A
+	initProof []byte, // proof that chainA stored connectionEnd in state (on ConnOpenInit)
 	proofHeight exported.Height, // height at which relayer constructs proof of A storing connectionEnd in state
-	_ exported.Height, // latest height of chain B which chain A has stored in its chain B client
 ) (string, error) {
 	// generate a new connection
 	connectionID := k.GenerateConnectionIdentifier(ctx)
@@ -88,7 +78,7 @@ func (k Keeper) ConnOpenTry(
 	// NOTE: chainA and chainB must have the same delay period
 	prefix := k.GetCommitmentPrefix()
 	expectedCounterparty := types.NewCounterparty(clientID, "", commitmenttypes.NewMerklePrefix(prefix.Bytes()))
-	expectedConnection := types.NewConnectionEnd(types.INIT, counterparty.ClientId, expectedCounterparty, types.ExportedVersionsToProto(counterpartyVersions), delayPeriod)
+	expectedConnection := types.NewConnectionEnd(types.INIT, counterparty.ClientId, expectedCounterparty, counterpartyVersions, delayPeriod)
 
 	// chain B picks a version from Chain A's available versions that is compatible
 	// with Chain B's supported IBC versions. PickVersion will select the intersection
@@ -103,7 +93,7 @@ func (k Keeper) ConnOpenTry(
 
 	// Check that ChainA committed expectedConnectionEnd to its state
 	if err := k.VerifyConnectionState(
-		ctx, connection, proofHeight, proofInit, counterparty.ConnectionId,
+		ctx, connection, proofHeight, initProof, counterparty.ConnectionId,
 		expectedConnection,
 	); err != nil {
 		return "", err
@@ -111,17 +101,15 @@ func (k Keeper) ConnOpenTry(
 
 	// store connection in chainB state
 	if err := k.addConnectionToClient(ctx, clientID, connectionID); err != nil {
-		return "", sdkerrors.Wrapf(err, "failed to add connection with ID %s to client with ID %s", connectionID, clientID)
+		return "", errorsmod.Wrapf(err, "failed to add connection with ID %s to client with ID %s", connectionID, clientID)
 	}
 
 	k.SetConnection(ctx, connectionID, connection)
-	k.Logger(ctx).Info("connection state updated", "connection-id", connectionID, "previous-state", "NONE", "new-state", "TRYOPEN")
+	k.Logger(ctx).Info("connection state updated", "connection-id", connectionID, "previous-state", types.UNINITIALIZED, "new-state", types.TRYOPEN)
 
-	defer func() {
-		telemetry.IncrCounter(1, "ibc", "connection", "open-try")
-	}()
+	defer telemetry.IncrCounter(1, "ibc", "connection", "open-try")
 
-	EmitConnectionOpenTryEvent(ctx, connectionID, clientID, counterparty)
+	emitConnectionOpenTryEvent(ctx, connectionID, clientID, counterparty)
 
 	return connectionID, nil
 }
@@ -130,35 +118,31 @@ func (k Keeper) ConnOpenTry(
 // to chain A (this code is executed on chain A).
 //
 // NOTE: Identifiers are checked on msg validation.
-func (k Keeper) ConnOpenAck(
+func (k *Keeper) ConnOpenAck(
 	ctx sdk.Context,
 	connectionID string,
-	_ exported.ClientState, // client state for chainA on chainB
 	version *types.Version, // version that ChainB chose in ConnOpenTry
 	counterpartyConnectionID string,
-	proofTry []byte, // proof that connectionEnd was added to ChainB state in ConnOpenTry
-	_ []byte, // proof of client state on chainB for chainA
-	_ []byte, // proof that chainB has stored ConsensusState of chainA on its client
+	tryProof []byte, // proof that connectionEnd was added to ChainB state in ConnOpenTry
 	proofHeight exported.Height, // height that relayer constructed proofTry
-	_ exported.Height, // latest height of chainA that chainB has stored on its chainA client
 ) error {
 	// Retrieve connection
 	connection, found := k.GetConnection(ctx, connectionID)
 	if !found {
-		return sdkerrors.Wrap(types.ErrConnectionNotFound, connectionID)
+		return errorsmod.Wrap(types.ErrConnectionNotFound, connectionID)
 	}
 
 	// verify the previously set connection state
 	if connection.State != types.INIT {
-		return sdkerrors.Wrapf(
+		return errorsmod.Wrapf(
 			types.ErrInvalidConnectionState,
-			"connection state is not INIT (got %s)", connection.State.String(),
+			"connection state is not INIT (got %s)", connection.State,
 		)
 	}
 
 	// ensure selected version is supported
-	if !types.IsSupportedVersion(types.ProtoVersionsToExported(connection.Versions), version) {
-		return sdkerrors.Wrapf(
+	if !types.IsSupportedVersion(connection.Versions, version) {
+		return errorsmod.Wrapf(
 			types.ErrInvalidConnectionState,
 			"the counterparty selected version %s is not supported by versions selected on INIT", version,
 		)
@@ -170,17 +154,15 @@ func (k Keeper) ConnOpenAck(
 
 	// Ensure that ChainB stored expected connectionEnd in its state during ConnOpenTry
 	if err := k.VerifyConnectionState(
-		ctx, connection, proofHeight, proofTry, counterpartyConnectionID,
+		ctx, connection, proofHeight, tryProof, counterpartyConnectionID,
 		expectedConnection,
 	); err != nil {
 		return err
 	}
 
-	k.Logger(ctx).Info("connection state updated", "connection-id", connectionID, "previous-state", "INIT", "new-state", "OPEN")
+	k.Logger(ctx).Info("connection state updated", "connection-id", connectionID, "previous-state", types.INIT, "new-state", types.OPEN)
 
-	defer func() {
-		telemetry.IncrCounter(1, "ibc", "connection", "open-ack")
-	}()
+	defer telemetry.IncrCounter(1, "ibc", "connection", "open-ack")
 
 	// Update connection state to Open
 	connection.State = types.OPEN
@@ -188,7 +170,7 @@ func (k Keeper) ConnOpenAck(
 	connection.Counterparty.ConnectionId = counterpartyConnectionID
 	k.SetConnection(ctx, connectionID, connection)
 
-	EmitConnectionOpenAckEvent(ctx, connectionID, connection)
+	emitConnectionOpenAckEvent(ctx, connectionID, connection)
 
 	return nil
 }
@@ -197,23 +179,23 @@ func (k Keeper) ConnOpenAck(
 // which the connection is open on both chains (this code is executed on chain B).
 //
 // NOTE: Identifiers are checked on msg validation.
-func (k Keeper) ConnOpenConfirm(
+func (k *Keeper) ConnOpenConfirm(
 	ctx sdk.Context,
 	connectionID string,
-	proofAck []byte, // proof that connection opened on ChainA during ConnOpenAck
+	ackProof []byte, // proof that connection opened on ChainA during ConnOpenAck
 	proofHeight exported.Height, // height that relayer constructed proofAck
 ) error {
 	// Retrieve connection
 	connection, found := k.GetConnection(ctx, connectionID)
 	if !found {
-		return sdkerrors.Wrap(types.ErrConnectionNotFound, connectionID)
+		return errorsmod.Wrap(types.ErrConnectionNotFound, connectionID)
 	}
 
 	// Check that connection state on ChainB is on state: TRYOPEN
 	if connection.State != types.TRYOPEN {
-		return sdkerrors.Wrapf(
+		return errorsmod.Wrapf(
 			types.ErrInvalidConnectionState,
-			"connection state is not TRYOPEN (got %s)", connection.State.String(),
+			"connection state is not TRYOPEN (got %s)", connection.State,
 		)
 	}
 
@@ -223,7 +205,7 @@ func (k Keeper) ConnOpenConfirm(
 
 	// Check that connection on ChainA is open
 	if err := k.VerifyConnectionState(
-		ctx, connection, proofHeight, proofAck, connection.Counterparty.ConnectionId,
+		ctx, connection, proofHeight, ackProof, connection.Counterparty.ConnectionId,
 		expectedConnection,
 	); err != nil {
 		return err
@@ -232,13 +214,11 @@ func (k Keeper) ConnOpenConfirm(
 	// Update ChainB's connection to Open
 	connection.State = types.OPEN
 	k.SetConnection(ctx, connectionID, connection)
-	k.Logger(ctx).Info("connection state updated", "connection-id", connectionID, "previous-state", "TRYOPEN", "new-state", "OPEN")
+	k.Logger(ctx).Info("connection state updated", "connection-id", connectionID, "previous-state", types.TRYOPEN, "new-state", types.OPEN)
 
-	defer func() {
-		telemetry.IncrCounter(1, "ibc", "connection", "open-confirm")
-	}()
+	defer telemetry.IncrCounter(1, "ibc", "connection", "open-confirm")
 
-	EmitConnectionOpenConfirmEvent(ctx, connectionID, connection)
+	emitConnectionOpenConfirmEvent(ctx, connectionID, connection)
 
 	return nil
 }
