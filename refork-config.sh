@@ -1,6 +1,6 @@
 #! bin/sh
 # agoric-labs/ibc-go config
-VERSION=v10.5.0-alpha.agoric.3
+VERSION=v10.5.0-alpha.agoric.4
 PREFIXES=
 FORK_BRANCH=Agoric
 BASE_REF=v7.10.0
