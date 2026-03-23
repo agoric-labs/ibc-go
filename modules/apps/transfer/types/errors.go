@@ -21,5 +21,4 @@ var (
 	ErrAbiEncoding             = errorsmod.Register(ModuleName, 14, "encoding abi failed")
 	ErrAbiDecoding             = errorsmod.Register(ModuleName, 15, "decoding abi failed")
 	ErrReceiveFailed           = errorsmod.Register(ModuleName, 16, "receive packet failed")
-	ErrInvalidType             = errorsmod.Register(ModuleName, 17, "invalid type")
 )
